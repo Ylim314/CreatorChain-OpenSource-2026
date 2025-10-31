@@ -300,14 +300,14 @@ func (ai *AIEngine) callAIAPIMock(model AIModel, prompt string, req GenerationRe
 		Confidence:     0.88 + float64(req.Complexity)/1000, // 模拟置信度
 		ProcessingTime: processingTime,
 		Metadata: map[string]interface{}{
-			"model":       model.Name,
-			"provider":    model.Provider,
-			"mode":        "DEMO_MOCK",
-			"iterations":  req.Iterations,
-			"complexity":  req.Complexity,
-			"creativity":  req.Creativity,
-			"timestamp":   time.Now().Unix(),
-			"notice":      "这是演示模式，配置API Key后可使用真实AI服务",
+			"model":      model.Name,
+			"provider":   model.Provider,
+			"mode":       "DEMO_MOCK",
+			"iterations": req.Iterations,
+			"complexity": req.Complexity,
+			"creativity": req.Creativity,
+			"timestamp":  time.Now().Unix(),
+			"notice":     "这是演示模式，配置API Key后可使用真实AI服务",
 		},
 	}, nil
 }
@@ -478,7 +478,7 @@ func (ai *AIEngine) callZhipuAI(prompt string, req GenerationRequest, model AIMo
 			"completion_tokens": zhipuResp.Usage.CompletionTokens,
 			"iterations":        req.Iterations,
 			"timestamp":         time.Now().Unix(),
-			"国产大模型":            true,
+			"国产大模型":             true,
 		},
 	}, nil
 }
@@ -547,8 +547,8 @@ func (ai *AIEngine) callCogView(prompt string, req GenerationRequest, apiKey, ba
 // getZhipuModelID 获取智谱AI的模型ID
 func (ai *AIEngine) getZhipuModelID(modelName string) string {
 	modelMap := map[string]string{
-		"智谱GLM-4.6":       "glm-4-plus", // 使用最新Plus版本
-		"智谱GLM-4-Air":    "glm-4-air",
+		"智谱GLM-4.6":     "glm-4-plus", // 使用最新Plus版本
+		"智谱GLM-4-Air":   "glm-4-air",
 		"智谱GLM-4V-Plus": "glm-4v-plus",
 		"智谱CogView-4":   "cogview-4",
 	}
