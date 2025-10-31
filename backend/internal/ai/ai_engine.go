@@ -74,9 +74,43 @@ func NewAIEngine(apiKey, baseURL string) *AIEngine {
 	}
 }
 
-// initializeModels 初始化AI模型配置
+// initializeModels 初始化AI模型配置 - 2025版本
 func initializeModels() map[string]AIModel {
 	return map[string]AIModel{
+		// 国产AI模型优先
+		"glm-4.6": {
+			Name:        "智谱GLM-4.6",
+			Provider:    "智谱AI",
+			Accuracy:    0.96,
+			Cost:        2, // 积分
+			MaxTokens:   150000,
+			Temperature: 0.7,
+		},
+		"glm-4-air": {
+			Name:        "智谱GLM-4-Air",
+			Provider:    "智谱AI",
+			Accuracy:    0.91,
+			Cost:        1, // 积分 - 高性价比
+			MaxTokens:   128000,
+			Temperature: 0.7,
+		},
+		"glm-4v-plus": {
+			Name:        "智谱GLM-4V-Plus",
+			Provider:    "智谱AI",
+			Accuracy:    0.95,
+			Cost:        4, // 积分 - 多模态
+			MaxTokens:   8000,
+			Temperature: 0.7,
+		},
+		"cogview-4": {
+			Name:        "智谱CogView-4",
+			Provider:    "智谱AI",
+			Accuracy:    0.93,
+			Cost:        5, // 积分 - 图像生成
+			MaxTokens:   2000,
+			Temperature: 0.8,
+		},
+		// 国外模型作为备选
 		"stable-diffusion": {
 			Name:        "Stable Diffusion XL",
 			Provider:    "Stability AI",
@@ -207,19 +241,75 @@ func (ai *AIEngine) buildEnhancedPrompt(req GenerationRequest) string {
 		req.Style)
 }
 
-// callAIAPI 调用AI API - 真实API调用实现
+// IsMockMode 检查是否为Mock模式（用于Demo演示）
+func (ai *AIEngine) IsMockMode() bool {
+	// 检查是否配置了任何有效的API Key
+	zhipuKey := os.Getenv("ZHIPU_API_KEY")
+	openaiKey := os.Getenv("OPENAI_API_KEY")
+	stabilityKey := os.Getenv("STABILITY_API_KEY")
+
+	return (zhipuKey == "" || zhipuKey == "mock") &&
+		(openaiKey == "" || openaiKey == "mock") &&
+		(stabilityKey == "" || stabilityKey == "mock") &&
+		(ai.apiKey == "" || ai.apiKey == "mock")
+}
+
+// callAIAPI 调用AI API - 支持Mock模式和多模型切换
 func (ai *AIEngine) callAIAPI(model AIModel, prompt string, req GenerationRequest) (*GenerationResponse, error) {
-	// 根据模型类型调用不同的API
-	switch model.Name {
-	case "Stable Diffusion XL":
+	// 检查是否为Mock模式
+	if ai.IsMockMode() {
+		return ai.callAIAPIMock(model, prompt, req)
+	}
+
+	// 根据模型提供商调用不同的API
+	switch model.Provider {
+	case "智谱AI":
+		return ai.callZhipuAI(prompt, req, model)
+	case "Stability AI":
 		return ai.callStabilityAI(prompt, req)
-	case "DALL-E 3":
+	case "OpenAI":
 		return ai.callOpenAI(prompt, req)
-	case "Midjourney v6":
+	case "Midjourney":
 		return ai.callMidjourney(prompt, req)
 	default:
 		return ai.callGenericAI(prompt, req)
 	}
+}
+
+// callAIAPIMock Mock模式的AI调用（用于Demo演示）
+func (ai *AIEngine) callAIAPIMock(model AIModel, prompt string, req GenerationRequest) (*GenerationResponse, error) {
+	// 模拟处理时间（根据复杂度）
+	processingTime := time.Duration(req.Complexity*10+req.Iterations*50) * time.Millisecond
+	time.Sleep(processingTime)
+
+	// 生成Mock响应内容
+	content := fmt.Sprintf("[Demo模式] 使用%s生成的%s风格作品。\n提示词: %s\n\n这是演示数据，实际使用时会调用真实AI API。配置API Key后即可使用真实AI生成功能。",
+		model.Name, req.Style, prompt)
+
+	// 使用随机图片服务作为示例（picsum提供免费占位图）
+	mockImageURL := fmt.Sprintf("https://picsum.photos/1024/1024?random=%d", time.Now().Unix())
+
+	// 如果是文本模型，不返回图片URL
+	if model.Provider == "智谱AI" && model.Name != "智谱CogView-4" {
+		mockImageURL = ""
+	}
+
+	return &GenerationResponse{
+		Content:        content,
+		ImageURL:       mockImageURL,
+		Confidence:     0.88 + float64(req.Complexity)/1000, // 模拟置信度
+		ProcessingTime: processingTime,
+		Metadata: map[string]interface{}{
+			"model":       model.Name,
+			"provider":    model.Provider,
+			"mode":        "DEMO_MOCK",
+			"iterations":  req.Iterations,
+			"complexity":  req.Complexity,
+			"creativity":  req.Creativity,
+			"timestamp":   time.Now().Unix(),
+			"notice":      "这是演示模式，配置API Key后可使用真实AI服务",
+		},
+	}, nil
 }
 
 // callOpenAI 调用OpenAI API
@@ -293,6 +383,180 @@ func (ai *AIEngine) callOpenAI(prompt string, req GenerationRequest) (*Generatio
 			"timestamp":  time.Now().Unix(),
 		},
 	}, nil
+}
+
+// callZhipuAI 调用智谱AI API - 支持GLM-4.6等模型
+func (ai *AIEngine) callZhipuAI(prompt string, req GenerationRequest, model AIModel) (*GenerationResponse, error) {
+	apiKey := os.Getenv("ZHIPU_API_KEY")
+	if apiKey == "" {
+		apiKey = ai.apiKey
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("ZHIPU_API_KEY not configured")
+	}
+
+	baseURL := os.Getenv("ZHIPU_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://open.bigmodel.cn/api/paas/v4"
+	}
+
+	// 判断是否为图像生成模型
+	if model.Name == "智谱CogView-4" {
+		return ai.callCogView(prompt, req, apiKey, baseURL)
+	}
+
+	// 文本/多模态生成请求
+	requestBody := map[string]interface{}{
+		"model": ai.getZhipuModelID(model.Name),
+		"messages": []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+		"temperature": model.Temperature,
+		"top_p":       0.95,
+		"max_tokens":  4096,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", baseURL+"/chat/completions", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := ai.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var zhipuResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			TotalTokens      int `json:"total_tokens"`
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&zhipuResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(zhipuResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from API")
+	}
+
+	content := zhipuResp.Choices[0].Message.Content
+
+	return &GenerationResponse{
+		Content:    content,
+		ImageURL:   "",
+		Confidence: model.Accuracy,
+		Metadata: map[string]interface{}{
+			"model":             model.Name,
+			"provider":          "智谱AI",
+			"tokens_used":       zhipuResp.Usage.TotalTokens,
+			"prompt_tokens":     zhipuResp.Usage.PromptTokens,
+			"completion_tokens": zhipuResp.Usage.CompletionTokens,
+			"iterations":        req.Iterations,
+			"timestamp":         time.Now().Unix(),
+			"国产大模型":            true,
+		},
+	}, nil
+}
+
+// callCogView 调用CogView图像生成API
+func (ai *AIEngine) callCogView(prompt string, req GenerationRequest, apiKey, baseURL string) (*GenerationResponse, error) {
+	requestBody := map[string]interface{}{
+		"model":  "cogview-4",
+		"prompt": prompt,
+		"size":   "1024x1024",
+		"n":      1,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", baseURL+"/images/generations", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := ai.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var imageResp struct {
+		Data []struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&imageResp); err != nil {
+		return nil, fmt.Errorf("failed to decode image response: %w", err)
+	}
+
+	if len(imageResp.Data) == 0 {
+		return nil, fmt.Errorf("no image generated")
+	}
+
+	return &GenerationResponse{
+		Content:    fmt.Sprintf("Generated %s style artwork using CogView-4", req.Style),
+		ImageURL:   imageResp.Data[0].URL,
+		Confidence: 0.93,
+		Metadata: map[string]interface{}{
+			"model":     "CogView-4",
+			"provider":  "智谱AI",
+			"style":     req.Style,
+			"timestamp": time.Now().Unix(),
+			"国产AI图像生成":  true,
+		},
+	}, nil
+}
+
+// getZhipuModelID 获取智谱AI的模型ID
+func (ai *AIEngine) getZhipuModelID(modelName string) string {
+	modelMap := map[string]string{
+		"智谱GLM-4.6":       "glm-4-plus", // 使用最新Plus版本
+		"智谱GLM-4-Air":    "glm-4-air",
+		"智谱GLM-4V-Plus": "glm-4v-plus",
+		"智谱CogView-4":   "cogview-4",
+	}
+
+	if id, ok := modelMap[modelName]; ok {
+		return id
+	}
+	return "glm-4-plus" // 默认使用最强版本
 }
 
 // callStabilityAI 调用Stability AI API
