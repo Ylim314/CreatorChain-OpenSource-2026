@@ -1,3 +1,4 @@
+
 # CreatorChain - 基于区块链的数字创作确权平台
 
 CreatorChain 是一个创新的基于区块链技术的数字创作确权平台，通过双重确权机制为所有类型的数字创作内容提供永久、可信的版权保护。项目结合了区块链的不可篡改性、AI技术的创新性和去中心化存储的可靠性，为数字内容创作行业提供了全新的解决方案。
@@ -55,16 +56,7 @@ graph TB
     C --> F
 ```
 
-### 技术栈
-
-- **前端**: React 18 + Material-UI + Ethers.js + Tailwind CSS
-- **后端**: Go 1.21+ + Gin + GORM + Redis
-- **AI引擎**: 多模型集成 + 贡献度分析算法
-- **区块链**: Solidity 0.8.20 + OpenZeppelin + Hardhat
-- **存储**: IPFS + Pinata API + PostgreSQL/SQLite
-- **隐私**: 零知识证明 + 加密算法
-
-## 📁 项目结构
+### 📁 项目结构
 
 ```
 CreatorChain/
@@ -107,49 +99,6 @@ CreatorChain/
 7. **积分激励系统**：基于贡献度的公平激励机制
 8. **DAO治理**：去中心化自治，社区投票决策
 
-## 技术架构
-
-### 系统架构图
-
-```mermaid
-graph TB
-    subgraph "前端层"
-        A[React 前端<br/>- 用户界面<br/>- Web3 集成<br/>- 状态管理]
-    end
-  
-    subgraph "后端层"
-        B[Go 后端<br/>- API Gateway<br/>- 业务逻辑<br/>- 区块链监听]
-    end
-  
-    subgraph "AI引擎层"
-        C[AI 引擎服务<br/>- Stable Diffusion<br/>- DALL-E 3<br/>- Midjourney]
-    end
-  
-    subgraph "区块链层"
-        D[区块链网络<br/>- 智能合约<br/>- 事件监听<br/>- 零知识证明]
-    end
-  
-    subgraph "存储层"
-        E[数据存储层<br/>- PostgreSQL<br/>- Redis 缓存<br/>- 分布式存储]
-        F[IPFS 网络<br/>- 内容存储<br/>- 元数据存储<br/>- 冗余备份]
-    end
-  
-    A --> B
-    B --> C
-    A --> D
-    B --> E
-    C --> F
-```
-
-### 技术栈
-
-- **前端**: React 18 + Material-UI + Ethers.js
-- **后端**: Go 1.21+ + Gin + GORM + Redis
-- **AI 引擎**: 多模型集成 + 贡献度分析算法
-- **区块链**: Solidity 0.8.20 + OpenZeppelin + SafeMath
-- **存储**: IPFS + Pinata API + PostgreSQL
-- **隐私**: Schnorr 零知识证明 + 加密算法
-
 ## 🚀 快速开始
 
 ### 环境要求
@@ -165,7 +114,7 @@ graph TB
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/CreatorChain.git
+git clone https://github.com/Ylim314/CreatorChain.git
 cd CreatorChain
 ```
 
@@ -289,31 +238,15 @@ npx hardhat deploy --network localhost
 
 ## 📚 文档中心
 
-### 🎯 核心文档
-
-- **[技术设计文档](技术设计文档.md)** - 完整的技术架构和实现方案
-- **[区块链技术价值总结](区块链技术价值总结.md)** - 区块链技术应用深度分析
-- **[API接口文档](API接口文档.md)** - 完整的API接口说明
-- **[作品安装说明](作品安装说明.md)** - 详细的安装和运行说明
-
 ### 📖 技术文档
 
 - **[后端架构设计](后端架构设计.md)** - 后端技术架构详解
-- **[安全中间件说明](安全中间件说明.md)** - 安全机制详细说明
-- **[积分系统说明](积分系统说明.md)** - 积分系统设计说明
-- **[监控系统说明](监控系统说明.md)** - 监控和日志系统说明
 
 ### 🎨 设计文档
 
 - **[设计思路](设计思路.md)** - 架构设计、技术选型、功能模块设计
 - **[设计重难点](设计重难点.md)** - 技术难点、业务难点、安全难点分析
 - **[作品简介](作品简介.md)** - 项目概述、核心功能、技术特色
-
-### 🔧 部署文档
-
-- **[作品安装说明](作品安装说明.md)** - 详细安装步骤、环境配置、部署指南
-- **[钱包连接说明](钱包连接说明.md)** - 钱包连接和配置说明
-- **[控制台错误说明](控制台错误说明.md)** - 常见错误和解决方案
 
 ### 📋 其他文档
 
@@ -340,7 +273,7 @@ npx hardhat deploy --network localhost
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目采用 MIT 许可证
 
 ## 🙏 致谢
 
@@ -350,4 +283,3 @@ npx hardhat deploy --network localhost
 - [IPFS](https://ipfs.io/) - 去中心化存储协议
 
 **CreatorChain** - 让AI创作真正属于创作者 🎨✨
-
