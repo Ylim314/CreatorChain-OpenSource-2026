@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deploy CreatorChain Contract</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+</head>
+<body>
+    <h1>CreatorChain Contract Deployment</h1>
+    <button onclick="deployContract()">Deploy CreatorChainRegistry</button>
+    <div id="status"></div>
+    <div id="result"></div>
+
+    <script>
+        // Contract bytecode (you need to compile the contract first)
+        const contractBytecode = "0x608060405234801561001057600080fd5b50..."; // This would be the full bytecode
+
+        // Contract ABI (simplified for demo)
+        const contractABI = [
+            "constructor()",
+            "function registerCreation(string contentHash, string metadataHash, string proofHash, address[] contributors, uint256[] contributionShares) public returns (uint256)",
+            "function getCreation(uint256 creationId) public view returns (tuple)",
+            "function grantRole(bytes32 role, address account) public",
+            "function CREATOR_ROLE() public view returns (bytes32)",
+            "function VERIFIER_ROLE() public view returns (bytes32)"
+        ];
+
+        async function deployContract() {
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+
+            try {
+                statusDiv.innerHTML = "🔗 Connecting to MetaMask...";
+
+                if (!window.ethereum) {
+                    throw new Error("MetaMask not found!");
+                }
+
+                // Connect to local Ganache network
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: '0x539', // 1337 in hex
+                        chainName: 'CreatorChain Local',
+                        nativeCurrency: {
+                            name: 'Ethereum',
+                            symbol: 'ETH',
+                            decimals: 18
+                        },
+                        rpcUrls: ['http://localhost:8545'],
+                    }]
+                });
+
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                const signer = provider.getSigner();
+                const address = await signer.getAddress();
+
+                statusDiv.innerHTML = `✅ Connected as: ${address}`;
+
+                // For demo purposes, let's just save the deployment info
+                const deploymentInfo = {
+                    registryAddress: "0x742d35Cc6634C0532925a3b8D4C9db96C4b4D8b6", // This would be from actual deployment
+                    deployerAddress: address,
+                    network: "CreatorChain Local",
+                    deploymentTime: new Date().toISOString()
+                };
+
+                resultDiv.innerHTML = `
+                    <h3>✅ Deployment Simulated Successfully!</h3>
+                    <p><strong>Registry Address:</strong> ${deploymentInfo.registryAddress}</p>
+                    <p><strong>Deployer:</strong> ${deploymentInfo.deployerAddress}</p>
+                    <p><strong>Network:</strong> ${deploymentInfo.network}</p>
+                    <p><strong>Time:</strong> ${deploymentInfo.deploymentTime}</p>
+                    <br>
+                    <p>📝 Note: In a real deployment, the contract would be compiled and deployed to the blockchain.</p>
+                    <p>🚀 You can now test the frontend by connecting MetaMask to the local network!</p>
+                `;
+
+                // Save to localStorage for the frontend to use
+                localStorage.setItem('creatorchain_deployment', JSON.stringify(deploymentInfo));
+
+            } catch (error) {
+                console.error("Deployment error:", error);
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

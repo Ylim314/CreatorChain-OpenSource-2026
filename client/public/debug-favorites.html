@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Favorites</title>
+</head>
+<body>
+    <h1>Debug CreatorChain Favorites</h1>
+    <button onclick="showFavorites()">Show Current Favorites</button>
+    <button onclick="cleanFavorites()">Clean Favorites Data</button>
+    <button onclick="clearAllFavorites()">Clear All Favorites</button>
+
+    <div id="output"></div>
+
+    <script>
+        function showFavorites() {
+            const stored = localStorage.getItem('creatorchain_favorites');
+            const output = document.getElementById('output');
+
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    output.innerHTML = '<h3>Current Favorites Data:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } catch (e) {
+                    output.innerHTML = '<h3>Error parsing favorites data:</h3><pre>' + e.message + '</pre>';
+                }
+            } else {
+                output.innerHTML = '<h3>No favorites data found</h3>';
+            }
+        }
+
+        function cleanFavorites() {
+            const stored = localStorage.getItem('creatorchain_favorites');
+
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    let cleaned = false;
+
+                    Object.keys(data).forEach(userAddress => {
+                        if (Array.isArray(data[userAddress])) {
+                            const originalLength = data[userAddress].length;
+                            // 转换为字符串，去重，过滤无效值
+                            data[userAddress] = [...new Set(data[userAddress].map(id => String(id)))].filter(id => id !== 'null' && id !== 'undefined' && id !== '');
+                            if (data[userAddress].length !== originalLength) {
+                                cleaned = true;
+                            }
+                        }
+                    });
+
+                    if (cleaned) {
+                        localStorage.setItem('creatorchain_favorites', JSON.stringify(data));
+                        alert('Favorites data cleaned successfully');
+                        showFavorites();
+                    } else {
+                        alert('No cleaning needed');
+                    }
+                } catch (e) {
+                    alert('Error cleaning favorites: ' + e.message);
+                }
+            } else {
+                alert('No favorites data to clean');
+            }
+        }
+
+        function clearAllFavorites() {
+            if (confirm('Are you sure you want to clear all favorites data?')) {
+                localStorage.removeItem('creatorchain_favorites');
+                alert('All favorites data cleared');
+                showFavorites();
+            }
+        }
+    </script>
+</body>
+</html>

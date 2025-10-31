@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: creatorchain-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 720720
+      MYSQL_DATABASE: creatorchain
+      MYSQL_USER: creatorchain
+      MYSQL_PASSWORD: password
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/init_mysql.sql:/docker-entrypoint-initdb.d/init_mysql.sql
+    networks:
+      - creatorchain-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p720720"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: creatorchain-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - creatorchain-network
+
+  # 后端 API 服务
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: creatorchain-api
+    environment:
+      - DATABASE_URL=mysql://creatorchain:password@mysql:3306/creatorchain?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_URL=redis://redis:6379
+      - ETHEREUM_RPC=http://localhost:8545
+      - PORT=8080
+      - GIN_MODE=release
+      - ENABLE_RATE_LIMIT=true
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_WINDOW=60
+      - LOG_LEVEL=info
+      - ENABLE_METRICS=true
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - creatorchain-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Hardhat 本地以太坊节点（可选）
+  hardhat:
+    image: node:18-alpine
+    container_name: creatorchain-hardhat
+    working_dir: /app
+    command: >
+      sh -c "
+        npm install --global hardhat &&
+        npx hardhat node --hostname 0.0.0.0
+      "
+    ports:
+      - "8545:8545"
+    networks:
+      - creatorchain-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  creatorchain-network:
+    driver: bridge

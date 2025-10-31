@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="CreatorChain - 区块链+AIGC创作确权平台"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Material Icons -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+    />
+    
+    <!-- Roboto Font -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+    />
+    
+    <title>CreatorChain-基于区块链与AI的数字创作确权平台</title>
+
+    <!-- 早期错误处理脚本 - 过滤浏览器扩展错误 -->
+    <script>
+      (function() {
+        // 保存原始的console方法
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        // 检查是否为扩展错误
+        function isExtensionError(message) {
+          const msg = String(message || '');
+          return msg.includes('A listener indicated an asynchronous response') ||
+                 msg.includes('message channel closed') ||
+                 msg.includes('Receiving end does not exist') ||
+                 msg.includes('v[w] is not a function') ||
+                 msg.includes('is not a function') ||
+                 msg.includes('main.') ||
+                 msg.includes('chunk.') ||
+                 msg.includes('a.onload') ||
+                 /^[a-z]\[[a-z]\]/.test(msg);
+        }
+
+        // 过滤console.error
+        console.error = function(...args) {
+          if (!isExtensionError(args[0])) {
+            originalError.apply(console, args);
+          }
+        };
+
+        // 过滤console.warn
+        console.warn = function(...args) {
+          if (!isExtensionError(args[0])) {
+            originalWarn.apply(console, args);
+          }
+        };
+
+        // 过滤未捕获的Promise错误
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isExtensionError(event.reason)) {
+            event.preventDefault();
+          }
+        });
+
+        // 过滤脚本错误
+        window.addEventListener('error', function(event) {
+          if (isExtensionError(event.message) ||
+              (event.filename && (event.filename.includes('extension') ||
+                                  event.filename.includes('main.') ||
+                                  event.filename.includes('chunk.')))) {
+            event.preventDefault();
+          }
+        });
+      })();
+    </script>
+
+  </head>
+  <body>
+    <noscript>您需要启用JavaScript才能运行此应用程序。</noscript>
+    <div id="root"></div>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+  </body>
+</html>

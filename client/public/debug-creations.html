@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug User Creations</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .creation { border: 1px solid #ccc; margin: 10px 0; padding: 10px; }
+        img { max-width: 200px; max-height: 150px; }
+        pre { background: #f5f5f5; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Debug User Creations</h1>
+    <button onclick="showCreations()">Show User Creations</button>
+    <button onclick="clearCreations()">Clear All Creations</button>
+
+    <div id="output"></div>
+
+    <script>
+        function showCreations() {
+            const stored = localStorage.getItem('userCreations');
+            const output = document.getElementById('output');
+
+            if (stored) {
+                try {
+                    const creations = JSON.parse(stored);
+                    let html = '<h3>User Creations (' + creations.length + '):</h3>';
+
+                    creations.forEach((creation, index) => {
+                        html += '<div class="creation">';
+                        html += '<h4>' + (creation.title || 'Untitled') + '</h4>';
+                        html += '<p><strong>ID:</strong> ' + creation.id + '</p>';
+                        html += '<p><strong>Description:</strong> ' + (creation.description || 'No description') + '</p>';
+                        html += '<p><strong>File Hash:</strong> ' + (creation.fileHash || 'No hash') + '</p>';
+                        html += '<p><strong>Image Path:</strong> ' + (creation.image || 'No image') + '</p>';
+                        html += '<p><strong>Created:</strong> ' + (creation.createdAt || 'No date') + '</p>';
+
+                        if (creation.image) {
+                            html += '<p><strong>Image Preview:</strong></p>';
+                            html += '<img src="' + creation.image + '" alt="Creation Image" onerror="this.style.display=\'none\'; this.nextSibling.style.display=\'block\';">';
+                            html += '<p style="display:none; color:red;">Image failed to load: ' + creation.image + '</p>';
+                        }
+
+                        if (creation.fileHash && creation.fileHash.startsWith('/uploads/')) {
+                            html += '<p><strong>Local File Preview:</strong></p>';
+                            html += '<img src="http://localhost:8080' + creation.fileHash + '" alt="Local File" onerror="this.style.display=\'none\'; this.nextSibling.style.display=\'block\';">';
+                            html += '<p style="display:none; color:red;">Local file failed to load: http://localhost:8080' + creation.fileHash + '</p>';
+                        }
+
+                        html += '<details><summary>Raw Data</summary><pre>' + JSON.stringify(creation, null, 2) + '</pre></details>';
+                        html += '</div>';
+                    });
+
+                    output.innerHTML = html;
+                } catch (e) {
+                    output.innerHTML = '<h3>Error parsing creations data:</h3><pre>' + e.message + '</pre>';
+                }
+            } else {
+                output.innerHTML = '<h3>No user creations found</h3>';
+            }
+        }
+
+        function clearCreations() {
+            if (confirm('Are you sure you want to clear all user creations?')) {
+                localStorage.removeItem('userCreations');
+                alert('All user creations cleared');
+                showCreations();
+            }
+        }
+
+        // Auto-load on page load
+        showCreations();
+    </script>
+</body>
+</html>
