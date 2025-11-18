@@ -6,16 +6,39 @@ package-lock.json
 .env
 .env.local
 .env.*.local
+.env.tmp
+backend/.env
+client/.env
 
 # 构建输出
 dist/
 build/
 out/
+backend/bin/
+
+# Go 编译文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+server.exe
+backend/server.exe
+backend/simple_backend.exe
+
+# Go 依赖
+vendor/
+go.work
+go.work.sum
 
 # 区块链相关
 cache/
 artifacts/
 typechain-types/
+contracts/cache/
+contracts/artifacts/
 
 # 编译文件
 *.tsbuildinfo
@@ -30,11 +53,12 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE & 工具
 .vscode/
 .idea/
 *.swp
 *.swo
+.trae/
 
 # 测试覆盖率
 coverage/
@@ -43,3 +67,13 @@ coverage/
 # 临时文件
 *.tmp
 .cache/
+
+# 上传文件（用户数据）
+uploads/
+backend/uploads/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+creatorchain.db
