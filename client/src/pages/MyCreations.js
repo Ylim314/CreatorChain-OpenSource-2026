@@ -234,7 +234,16 @@ const MyCreations = () => {
       ];
 
       // 4. 合并所有创作数据，区块链和本地创作优先显示
-      const finalCreations = [...combinedCreations, ...mockCreations];
+      const finalCreationsRaw = [...combinedCreations, ...mockCreations];
+      const seen = new Set();
+      const finalCreations = [];
+      for (const c of finalCreationsRaw) {
+        const k = `${c.id}-${c.hash || c.fileHash || c.createdAt || c.title || ''}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          finalCreations.push(c);
+        }
+      }
 
       setCreations(finalCreations);
       setFilteredCreations(finalCreations);
@@ -558,8 +567,8 @@ const MyCreations = () => {
 
         {/* 作品列表 */}
         <Grid container spacing={3}>
-          {filteredCreations.map((creation) => (
-            <Grid item xs={12} sm={6} md={4} key={creation.id} sx={{ display: 'flex' }}>
+          {filteredCreations.map((creation, index) => (
+            <Grid item xs={12} sm={6} md={4} key={`${creation.id}-${creation.hash || creation.fileHash || creation.createdAt || creation.title || index}` } sx={{ display: 'flex' }}>
               <Card sx={{ 
                 height: '100%',
                 width: '100%',

@@ -9,9 +9,11 @@ class ApiService {
   // 通用请求方法
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
+    const authHeaders = this.getAuthHeaders();
     const config = {
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options.headers,
       },
       ...options,
@@ -114,6 +116,28 @@ class ApiService {
       method: 'DELETE',
       headers,
     });
+  }
+
+  // 附加认证头
+  getAuthHeaders() {
+    try {
+      const address = localStorage.getItem('userAddress');
+      const signature = localStorage.getItem('authSignature');
+      const message = localStorage.getItem('authMessage');
+      const timestamp = localStorage.getItem('authTimestamp');
+
+      if (address && signature && message && timestamp) {
+        return {
+          'User-Address': address,
+          'Signature': signature,
+          'Message': message,
+          'Timestamp': timestamp
+        };
+      }
+    } catch (error) {
+      console.warn('无法读取本地认证信息:', error);
+    }
+    return {};
   }
 
   // 用户相关API
@@ -236,7 +260,7 @@ class ApiService {
   }
 }
 
-// 创建单例实例
-const apiService = new ApiService();
+  // 创建单例实例
+  const apiService = new ApiService();
 
-export default apiService;
+  export default apiService;

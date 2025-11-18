@@ -8,6 +8,15 @@ const Web3Context = createContext();
 
 export const useWeb3 = () => useContext(Web3Context);
 
+const AUTH_MESSAGE_PREFIX = 'CreatorChain Authentication';
+
+const buildAuthPayload = (address) => {
+  const normalized = (address || '').toLowerCase();
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const message = `${AUTH_MESSAGE_PREFIX}\nAddress:${normalized}\nTimestamp:${timestamp}`;
+  return { message, timestamp };
+};
+
 export const Web3Provider = ({ children }) => {
   const [account, setAccount] = useState(null);
   const [provider, setProvider] = useState(null);
@@ -41,31 +50,55 @@ export const Web3Provider = ({ children }) => {
     }
   }, [connected, account]);
 
-  // 简化的用户认证
-  const authenticateUser = useCallback(async (address) => {
+  // 用户认证流程：签名 + 后端登录
+  const authenticateUser = useCallback(async (address, signerInstance) => {
+    if (!signerInstance || typeof signerInstance.signMessage !== 'function') {
+      throw new Error('Signer unavailable for authentication');
+    }
+
+    const { message, timestamp } = buildAuthPayload(address);
+    let signature;
+
     try {
-      // 简化认证流程，直接设置用户
-      localStorage.setItem('userAddress', address);
-      localStorage.setItem('authToken', 'demo-token-' + address);
-      
-      // 尝试调用后端API
-      try {
-        const response = await apiService.loginUser({
-          address: address,
-          signature: 'demo-signature',
-          message: 'Demo login'
-        });
-        
-        if (response.success) {
-          setPoints(response.user?.points || 1000);
-        }
-      } catch (error) {
-        console.warn('Backend not available, using default points');
-        setPoints(1000); // 默认积分
-      }
+      signature = await signerInstance.signMessage(message);
     } catch (error) {
-      console.error('认证失败:', error);
+      console.error('签名认证被拒绝或失败:', error);
+      toast.error('签名被拒绝，无法完成登录');
       throw error;
+    }
+
+    localStorage.setItem('userAddress', address);
+    localStorage.setItem('authMessage', message);
+    localStorage.setItem('authTimestamp', timestamp);
+    localStorage.setItem('authSignature', signature);
+
+    try {
+      const response = await apiService.loginUser({
+        address,
+        signature,
+        message,
+        timestamp,
+      });
+
+      const token =
+        response?.token ||
+        response?.Token ||
+        response?.data?.token ||
+        `demo-token-${address}`;
+      const responsePoints =
+        response?.user?.points ??
+        response?.user?.Points ??
+        response?.points ??
+        1000;
+
+      localStorage.setItem('authToken', token);
+      setPoints(Number(responsePoints) || 0);
+    } catch (error) {
+      console.warn('Backend login unavailable，使用本地令牌:', error);
+      localStorage.setItem('authToken', `demo-token-${address}`);
+      setPoints((prev) =>
+        typeof prev === 'number' && prev > 0 ? prev : 1000
+      );
     }
   }, []);
 
@@ -74,6 +107,9 @@ export const Web3Provider = ({ children }) => {
     // 清理用户相关数据
     localStorage.removeItem('authToken');
     localStorage.removeItem('userAddress');
+    localStorage.removeItem('authSignature');
+    localStorage.removeItem('authTimestamp');
+    localStorage.removeItem('authMessage');
 
     // 清理收藏数据（保留其他用户的数据）
     if (account) {
@@ -144,7 +180,7 @@ export const Web3Provider = ({ children }) => {
       });
 
       // 异步认证用户
-      await authenticateUser(address);
+      await authenticateUser(address, ethersSigner);
 
       // 更新收藏数量
       setTimeout(() => updateFavoritesCount(), 100);
