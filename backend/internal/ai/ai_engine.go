@@ -20,23 +20,26 @@ type AIEngine struct {
 
 // AIModel AI模型配置
 type AIModel struct {
-	Name        string  `json:"name"`
-	Provider    string  `json:"provider"`
-	Accuracy    float64 `json:"accuracy"`
-	Cost        float64 `json:"cost"`
-	MaxTokens   int     `json:"max_tokens"`
-	Temperature float64 `json:"temperature"`
+    Name        string  `json:"name"`
+    Provider    string  `json:"provider"`
+    Accuracy    float64 `json:"accuracy"`
+    Cost        float64 `json:"cost"`
+    MaxTokens   int     `json:"max_tokens"`
+    Temperature float64 `json:"temperature"`
+    Capabilities []string `json:"capabilities,omitempty"`
+    Type         string   `json:"type,omitempty"`
 }
 
 // GenerationRequest AI生成请求
 type GenerationRequest struct {
-	Prompt     string                 `json:"prompt"`
-	Style      string                 `json:"style"`
-	Complexity int                    `json:"complexity"`
-	Creativity int                    `json:"creativity"`
-	Model      string                 `json:"model"`
-	Parameters map[string]interface{} `json:"parameters"`
-	Iterations int                    `json:"iterations"`
+    Prompt     string                 `json:"prompt"`
+    Style      string                 `json:"style"`
+    Complexity int                    `json:"complexity"`
+    Creativity int                    `json:"creativity"`
+    Model      string                 `json:"model"`
+    Parameters map[string]interface{} `json:"parameters"`
+    Iterations int                    `json:"iterations"`
+    Task       string                 `json:"task"` // text | image
 }
 
 // GenerationResponse AI生成响应
@@ -76,96 +79,173 @@ func NewAIEngine(apiKey, baseURL string) *AIEngine {
 
 // initializeModels 初始化AI模型配置 - 2025版本
 func initializeModels() map[string]AIModel {
-	return map[string]AIModel{
-		// 国产AI模型优先
-		"glm-4.6": {
-			Name:        "智谱GLM-4.6",
-			Provider:    "智谱AI",
-			Accuracy:    0.96,
-			Cost:        2, // 积分
-			MaxTokens:   150000,
-			Temperature: 0.7,
-		},
-		"glm-4-air": {
-			Name:        "智谱GLM-4-Air",
-			Provider:    "智谱AI",
-			Accuracy:    0.91,
-			Cost:        1, // 积分 - 高性价比
-			MaxTokens:   128000,
-			Temperature: 0.7,
-		},
-		"glm-4v-plus": {
-			Name:        "智谱GLM-4V-Plus",
-			Provider:    "智谱AI",
-			Accuracy:    0.95,
-			Cost:        4, // 积分 - 多模态
-			MaxTokens:   8000,
-			Temperature: 0.7,
-		},
-		"cogview-4": {
-			Name:        "智谱CogView-4",
-			Provider:    "智谱AI",
-			Accuracy:    0.93,
-			Cost:        5, // 积分 - 图像生成
-			MaxTokens:   2000,
-			Temperature: 0.8,
-		},
-		// 国外模型作为备选
-		"stable-diffusion": {
-			Name:        "Stable Diffusion XL",
-			Provider:    "Stability AI",
-			Accuracy:    0.92,
-			Cost:        5, // 积分
-			MaxTokens:   1000,
-			Temperature: 0.7,
-		},
-		"dall-e-3": {
-			Name:        "DALL-E 3",
-			Provider:    "OpenAI",
-			Accuracy:    0.95,
-			Cost:        8, // 积分
-			MaxTokens:   4000,
-			Temperature: 0.8,
-		},
-		"midjourney": {
-			Name:        "Midjourney v6",
-			Provider:    "Midjourney",
-			Accuracy:    0.94,
-			Cost:        10, // 积分
-			MaxTokens:   2000,
-			Temperature: 0.6,
-		},
-		"creative-ai": {
-			Name:        "CreativeAI Pro",
-			Provider:    "Custom",
-			Accuracy:    0.88,
-			Cost:        3, // 积分
-			MaxTokens:   1500,
-			Temperature: 0.9,
-		},
-	}
+    return map[string]AIModel{
+        // 国产AI模型优先
+        "glm-4.6": {
+            Name:        "智谱GLM-4.6",
+            Provider:    "智谱AI",
+            Accuracy:    0.96,
+            Cost:        2, // 积分
+            MaxTokens:   150000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        "glm-4-air": {
+            Name:        "智谱GLM-4-Air",
+            Provider:    "智谱AI",
+            Accuracy:    0.91,
+            Cost:        1, // 积分 - 高性价比
+            MaxTokens:   128000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        "glm-4v-plus": {
+            Name:        "智谱GLM-4V-Plus",
+            Provider:    "智谱AI",
+            Accuracy:    0.95,
+            Cost:        4, // 积分 - 多模态
+            MaxTokens:   8000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        "cogview-4": {
+            Name:        "智谱CogView-4",
+            Provider:    "智谱AI",
+            Accuracy:    0.93,
+            Cost:        5, // 积分 - 图像生成
+            MaxTokens:   2000,
+            Temperature: 0.8,
+            Capabilities: []string{"image"},
+            Type:         "image_generation",
+        },
+        // 国外模型作为备选
+        "stable-diffusion": {
+            Name:        "Stable Diffusion XL",
+            Provider:    "Stability AI",
+            Accuracy:    0.92,
+            Cost:        5, // 积分
+            MaxTokens:   1000,
+            Temperature: 0.7,
+            Capabilities: []string{"image"},
+            Type:         "image_generation",
+        },
+        "dall-e-3": {
+            Name:        "DALL-E 3",
+            Provider:    "OpenAI",
+            Accuracy:    0.95,
+            Cost:        8, // 积分
+            MaxTokens:   4000,
+            Temperature: 0.8,
+            Capabilities: []string{"image"},
+            Type:         "image_generation",
+        },
+        "midjourney": {
+            Name:        "Midjourney v6",
+            Provider:    "Midjourney",
+            Accuracy:    0.94,
+            Cost:        10, // 积分
+            MaxTokens:   2000,
+            Temperature: 0.6,
+            Capabilities: []string{"image"},
+            Type:         "image_generation",
+        },
+        "creative-ai": {
+            Name:        "CreativeAI Pro",
+            Provider:    "Custom",
+            Accuracy:    0.88,
+            Cost:        3, // 积分
+            MaxTokens:   1500,
+            Temperature: 0.9,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        // 优先文本模型（豆包、DeepSeek、Kimi、Qwen）
+        "doubao-text": {
+            Name:        "Doubao",
+            Provider:    "Doubao",
+            Accuracy:    0.92,
+            Cost:        2,
+            MaxTokens:   128000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        "deepseek-text": {
+            Name:        "DeepSeek",
+            Provider:    "DeepSeek",
+            Accuracy:    0.93,
+            Cost:        2,
+            MaxTokens:   128000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        "kimi-text": {
+            Name:        "Kimi",
+            Provider:    "Kimi",
+            Accuracy:    0.92,
+            Cost:        2,
+            MaxTokens:   128000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+        "qwen-text": {
+            Name:        "Qwen",
+            Provider:    "Qwen",
+            Accuracy:    0.93,
+            Cost:        2,
+            MaxTokens:   128000,
+            Temperature: 0.7,
+            Capabilities: []string{"text"},
+            Type:         "text_generation",
+        },
+    }
 }
 
 // GenerateArt 生成艺术作品 - 企业级AI实现
 func (ai *AIEngine) GenerateArt(req GenerationRequest) (*GenerationResponse, error) {
-	startTime := time.Now()
+    startTime := time.Now()
 
 	// 验证输入参数
 	if err := ai.validateRequest(req); err != nil {
 		return nil, fmt.Errorf("invalid request: %w", err)
 	}
 
-	// 选择最佳模型
-	model := ai.selectBestModel(req)
+    // 选择模型：优先使用显式 req.Model；否则按任务与风格选择
+    var model AIModel
+    if req.Model != "" {
+        if m, ok := ai.models[req.Model]; ok {
+            model = m
+        } else {
+            model = ai.selectBestModel(req)
+        }
+    } else {
+        model = ai.selectBestModel(req)
+    }
 
 	// 构建增强提示词
 	enhancedPrompt := ai.buildEnhancedPrompt(req)
 
-	// 调用AI API
-	response, err := ai.callAIAPI(model, enhancedPrompt, req)
-	if err != nil {
-		return nil, fmt.Errorf("AI API call failed: %w", err)
-	}
+    // 按任务类型调用
+    if req.Task == "text" || (len(model.Capabilities) > 0 && contains(model.Capabilities, "text")) {
+        // 文本任务统一走文本生成管线
+        response, err := ai.callAIAPI(model, enhancedPrompt, req)
+        if err != nil {
+            return nil, fmt.Errorf("AI API call failed: %w", err)
+        }
+        response.ProcessingTime = time.Since(startTime)
+        return response, nil
+    }
+
+    // 图像任务
+    response, err := ai.callAIAPI(model, enhancedPrompt, req)
+    if err != nil {
+        return nil, fmt.Errorf("AI API call failed: %w", err)
+    }
 
 	// 分析贡献度
 	analysis := ai.analyzeContribution(req, response)
@@ -262,18 +342,83 @@ func (ai *AIEngine) callAIAPI(model AIModel, prompt string, req GenerationReques
 	}
 
 	// 根据模型提供商调用不同的API
-	switch model.Provider {
-	case "智谱AI":
-		return ai.callZhipuAI(prompt, req, model)
-	case "Stability AI":
-		return ai.callStabilityAI(prompt, req)
-	case "OpenAI":
-		return ai.callOpenAI(prompt, req)
-	case "Midjourney":
-		return ai.callMidjourney(prompt, req)
-	default:
-		return ai.callGenericAI(prompt, req)
-	}
+    switch model.Provider {
+    case "智谱AI":
+        return ai.callZhipuAI(prompt, req, model)
+    case "Doubao":
+        return ai.callOpenAIChatCompatible(prompt, req, os.Getenv("DOUBAO_API_KEY"), os.Getenv("DOUBAO_BASE_URL"), req.Model)
+    case "DeepSeek":
+        return ai.callOpenAIChatCompatible(prompt, req, os.Getenv("DEEPSEEK_API_KEY"), os.Getenv("DEEPSEEK_BASE_URL"), req.Model)
+    case "Kimi":
+        base := os.Getenv("KIMI_BASE_URL")
+        if base == "" { base = "https://api.moonshot.cn" }
+        return ai.callOpenAIChatCompatible(prompt, req, os.Getenv("KIMI_API_KEY"), base, req.Model)
+    case "Qwen":
+        return ai.callOpenAIChatCompatible(prompt, req, os.Getenv("QWEN_API_KEY"), os.Getenv("QWEN_BASE_URL"), req.Model)
+    case "Stability AI":
+        return ai.callStabilityAI(prompt, req)
+    case "OpenAI":
+        return ai.callOpenAI(prompt, req)
+    case "Midjourney":
+        return ai.callMidjourney(prompt, req)
+    default:
+        return ai.callGenericAI(prompt, req)
+    }
+}
+
+// callOpenAIChatCompatible 统一的聊天文本生成（OpenAI 兼容协议）
+func (ai *AIEngine) callOpenAIChatCompatible(prompt string, req GenerationRequest, apiKey, baseURL, modelID string) (*GenerationResponse, error) {
+    if ai.IsMockMode() || apiKey == "" || baseURL == "" {
+        // 回退到 Mock 文本生成
+        return ai.callAIAPIMock(AIModel{Name: modelID, Provider: "OpenAI-Compatible", Accuracy: 0.9, Temperature: 0.7}, prompt, req)
+    }
+
+    body := map[string]interface{}{
+        "model":   modelID,
+        "messages": []map[string]interface{}{{"role": "user", "content": prompt}},
+        "temperature": 0.7,
+    }
+    jsonData, err := json.Marshal(body)
+    if err != nil { return nil, fmt.Errorf("marshal request failed: %w", err) }
+
+    url := baseURL
+    if !strings.HasSuffix(url, "/") { url += "/" }
+    url += "chat/completions"
+
+    httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+    if err != nil { return nil, fmt.Errorf("create request failed: %w", err) }
+    httpReq.Header.Set("Content-Type", "application/json")
+    httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+    resp, err := ai.client.Do(httpReq)
+    if err != nil { return nil, fmt.Errorf("call API failed: %w", err) }
+    defer resp.Body.Close()
+    if resp.StatusCode != http.StatusOK {
+        b, _ := io.ReadAll(resp.Body)
+        return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(b))
+    }
+
+    var r struct {
+        Choices []struct{ Message struct{ Content string `json:"content"` } `json:"message"` } `json:"choices"`
+    }
+    if err := json.NewDecoder(resp.Body).Decode(&r); err != nil { return nil, fmt.Errorf("decode failed: %w", err) }
+    content := ""
+    if len(r.Choices) > 0 { content = r.Choices[0].Message.Content }
+
+    return &GenerationResponse{
+        Content:    content,
+        Confidence: 0.9,
+        Metadata: map[string]interface{}{
+            "provider": "OpenAI-Compatible",
+            "model":    modelID,
+            "timestamp": time.Now().Unix(),
+        },
+    }, nil
+}
+
+func contains(arr []string, t string) bool {
+    for _, v := range arr { if v == t { return true } }
+    return false
 }
 
 // callAIAPIMock Mock模式的AI调用（用于Demo演示）

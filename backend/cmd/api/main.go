@@ -284,6 +284,10 @@ func setupRouter(
 	router.Use(api.RecoveryMiddleware())
 	router.Use(api.SecurityHeadersMiddleware())
 	router.Use(api.SecureCORSMiddleware(config.CORSOrigins))
+	if config.RequestTimeoutSeconds > 0 {
+		timeout := time.Duration(config.RequestTimeoutSeconds) * time.Second
+		router.Use(api.RequestTimeoutMiddleware(timeout))
+	}
 	router.Use(api.RequestSizeLimitMiddleware(10 * 1024 * 1024)) // 10MB
 	router.Use(api.InputSanitizationMiddleware())
 	router.Use(api.AuditLogMiddleware())

@@ -1,11 +1,14 @@
 package api
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -115,19 +118,36 @@ func isValidImageType(contentType string) bool {
 // generateRandomString 生成随机字符串
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+	buffer := make([]byte, length)
+	if _, err := rand.Read(buffer); err != nil {
+		fallback := fmt.Sprintf("fallback%x", time.Now().UnixNano())
+		if len(fallback) >= length {
+			return fallback[:length]
+		}
+		return fallback
 	}
-	return string(b)
+	for i := range buffer {
+		buffer[i] = charset[int(buffer[i])%len(charset)]
+	}
+	return string(buffer)
 }
 
 // generateContentHash 生成内容哈希
 func generateContentHash(filename string) string {
-	timestamp := time.Now().Unix()
-	random := generateRandomString(12)
-	cleanName := strings.ReplaceAll(filename, ".", "")
+	randomBytes := make([]byte, 32)
+	if _, err := rand.Read(randomBytes); err != nil {
+		randomBytes = []byte(strconv.FormatInt(time.Now().UnixNano(), 10))
+	}
 
-	// 生成类似IPFS的哈希格式
-	return fmt.Sprintf("Qm%s%s%d", random, cleanName, timestamp)[:46]
+	hash := sha256.New()
+	hash.Write(randomBytes)
+	hash.Write([]byte(filename))
+
+	digest := hash.Sum(nil)
+	digestHex := hex.EncodeToString(digest)
+	// 模拟IPFS CID的长度特征
+	if len(digestHex) < 44 {
+		digestHex = fmt.Sprintf("%044s", digestHex)
+	}
+	return "Qm" + digestHex[:44]
 }

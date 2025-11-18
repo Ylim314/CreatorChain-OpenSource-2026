@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"sort"
 	"time"
 )
 
@@ -43,11 +45,13 @@ import (
 
 // ZKProof 零知识证明结构 (实际为密码学承诺)
 type ZKProof struct {
-	Proof      string            `json:"proof"`       // 承诺值/签名
+	Proof      string            `json:"proof"`       // Schnorr签名
 	PublicData map[string]string `json:"public_data"` // 公开数据(创作ID、贡献度评分等)
 	Timestamp  int64             `json:"timestamp"`   // 时间戳(防重放攻击)
 	Nonce      string            `json:"nonce"`       // 随机盐(增强安全性)
-	Hash       string            `json:"hash"`        // 整体哈希(完整性校验)
+	Hash       string            `json:"hash"`        // 承诺哈希(完整性校验)
+	SecretHash string            `json:"secret_hash"` // 秘密数据哈希(防篡改)
+	PublicKey  string            `json:"public_key"`  // Schnorr公钥
 }
 
 // ZKVerifier 零知识证明验证器
@@ -56,6 +60,11 @@ type ZKVerifier struct {
 	prime     *big.Int // 大素数p (secp256k1曲线参数)
 	generator *big.Int // 生成元g
 }
+
+var (
+	proofExpiryWindow = time.Duration(0) // 0 表示永久有效
+	proofFutureSkew   = 5 * time.Minute  // 允许的最大未来偏移
+)
 
 // CreationProof 创作过程证明结构
 //
@@ -66,18 +75,20 @@ type ZKVerifier struct {
 // 【使用示例】
 // ```go
 // zkv := NewZKVerifier()
-// 
+//
 // // 创作时生成证明
-// secretData := map[string]interface{}{
-//     "prompt": "赛博朋克风格的未来城市",
-//     "model": "GLM-4.6",
-//     "iterations": 5,
-// }
+//
+//	secretData := map[string]interface{}{
+//	    "prompt": "赛博朋克风格的未来城市",
+//	    "model": "GLM-4.6",
+//	    "iterations": 5,
+//	}
+//
 // proof, _ := zkv.GenerateCreationProof("creation_123", secretData)
-// 
+//
 // // 上链: 只上传公开字段
 // blockchain.Store(proof.CreationID, proof.ProcessHash, proof.Proof)
-// 
+//
 // // 验证时: 提供原始秘密数据
 // isValid, _ := zkv.VerifyCreationProof(proof)
 // ```
@@ -170,7 +181,7 @@ func (zkv *ZKVerifier) GenerateCreationProof(creationID string, secretData map[s
 // VerifyCreationProof 验证创作过程零知识证明
 func (zkv *ZKVerifier) VerifyCreationProof(proof *CreationProof) (bool, error) {
 	// 验证证明的有效性
-	if err := zkv.validateProof(&proof.Proof); err != nil {
+	if err := zkv.validateProof(&proof.Proof, proof.Metadata); err != nil {
 		return false, fmt.Errorf("proof validation failed: %w", err)
 	}
 
@@ -224,27 +235,44 @@ func (zkv *ZKVerifier) generateProof(secretData, publicData map[string]interface
 
 	// 步骤2: 构建证明数据结构
 	// 包含秘密数据、公开数据、随机盐、时间戳
-	proofData := map[string]interface{}{
-		"secret":    secretData,        // 私密: 提示词、参数等
-		"public":    publicData,        // 公开: 创作ID、哈希等
-		"nonce":     nonce,             // 随机盐
-		"timestamp": time.Now().Unix(), // 时间戳
+	timestamp := time.Now().Unix()
+
+	// 计算秘密数据哈希，用于绑定承诺
+	secretHash := zkv.calculateHash(secretData)
+
+	// 派生Schnorr私钥(从秘密数据派生，避免依赖外部输入)
+	secretScalar := zkv.deriveSecretScalar(secretData)
+
+	// 计算Schnorr公钥
+	publicKey := new(big.Int).Exp(zkv.generator, secretScalar, zkv.prime)
+	publicKeyStr := publicKey.String()
+
+	// 添加公钥到公开数据
+	publicDataWithKey := cloneMap(publicData)
+	publicDataWithKey["public_key"] = publicKeyStr
+	publicDataStrings := zkv.convertToStringMap(publicDataWithKey)
+	publicDataForProof := convertToInterfaceMap(publicDataStrings)
+
+	// 计算整体承诺哈希
+	commitmentPayload := map[string]interface{}{
+		"secret_hash": secretHash,
+		"public_data": publicDataForProof,
+		"nonce":       nonce,
+		"timestamp":   timestamp,
 	}
+	proofHash := zkv.calculateHash(commitmentPayload)
 
-	// 步骤3: 计算整体哈希(SHA256)
-	// 这是"承诺值",后续无法修改
-	proofHash := zkv.calculateHash(proofData)
-
-	// 步骤4: 生成Schnorr签名证明
-	// 证明拥有秘密数据,但不泄露具体内容
-	proof := zkv.generateSchnorrProof(secretData, publicData, nonce)
+	// 生成Schnorr签名
+	proof := zkv.generateSchnorrProof(secretScalar, publicDataForProof)
 
 	return &ZKProof{
-		Proof:      proof,                              // Schnorr签名
-		PublicData: zkv.convertToStringMap(publicData), // 公开数据
-		Timestamp:  time.Now().Unix(),                  // 时间戳
-		Nonce:      nonce,                              // 随机盐
-		Hash:       proofHash,                          // 承诺值
+		Proof:      proof,
+		PublicData: publicDataStrings,
+		Timestamp:  timestamp,
+		Nonce:      nonce,
+		Hash:       proofHash,
+		SecretHash: secretHash,
+		PublicKey:  publicKeyStr,
 	}, nil
 }
 
@@ -274,7 +302,7 @@ func (zkv *ZKVerifier) generateProof(secretData, publicData map[string]interface
 // - 如果能伪造签名,则意味着可以解决离散对数问题(DLP)
 // - DLP在当前计算能力下被认为是困难问题
 // - 256位安全强度,相当于128位对称加密
-func (zkv *ZKVerifier) generateSchnorrProof(secretData, publicData map[string]interface{}, nonce string) string {
+func (zkv *ZKVerifier) generateSchnorrProof(secretScalar *big.Int, publicData map[string]interface{}) string {
 	// 步骤1: 选择随机数r (Prover的随机承诺)
 	// r ←R [0, p-1]
 	r, _ := rand.Int(rand.Reader, zkv.prime)
@@ -289,10 +317,8 @@ func (zkv *ZKVerifier) generateSchnorrProof(secretData, publicData map[string]in
 	challenge := zkv.calculateChallenge(R, publicData)
 
 	// 步骤4: 计算响应s = r + c·x mod p
-	// 其中x是秘密值(从秘密数据中提取)
-	// 这是Schnorr协议的第三轮消息
-	secretValue := zkv.extractSecretValue(secretData)
-	s := new(big.Int).Add(r, new(big.Int).Mul(challenge, secretValue))
+	// 其中x由秘密数据确定
+	s := new(big.Int).Add(r, new(big.Int).Mul(challenge, secretScalar))
 	s.Mod(s, zkv.prime)
 
 	// 步骤5: 返回证明 (R, s)
@@ -302,7 +328,7 @@ func (zkv *ZKVerifier) generateSchnorrProof(secretData, publicData map[string]in
 }
 
 // verifySchnorrProof 验证Schnorr零知识证明
-func (zkv *ZKVerifier) verifySchnorrProof(proof string, publicData map[string]interface{}) bool {
+func (zkv *ZKVerifier) verifySchnorrProof(proof string, publicData map[string]interface{}, publicKey string) bool {
 	// 解析证明
 	parts := splitString(proof, ":")
 	if len(parts) != 2 {
@@ -319,8 +345,10 @@ func (zkv *ZKVerifier) verifySchnorrProof(proof string, publicData map[string]in
 	challenge := zkv.calculateChallenge(R, publicData)
 
 	// 验证 g^s = R * Y^c mod p
-	// 其中Y是公钥，这里简化为generator
-	Y := zkv.generator
+	Y, ok := new(big.Int).SetString(publicKey, 10)
+	if !ok {
+		return false
+	}
 	left := new(big.Int).Exp(zkv.generator, s, zkv.prime)
 	right := new(big.Int).Mul(R, new(big.Int).Exp(Y, challenge, zkv.prime))
 	right.Mod(right, zkv.prime)
@@ -411,7 +439,7 @@ func (zkv *ZKVerifier) calculateContributionScore(data map[string]interface{}) i
 }
 
 // calculateHash 计算数据哈希
-func (zkv *ZKVerifier) calculateHash(data map[string]interface{}) string {
+func (zkv *ZKVerifier) calculateHash(data interface{}) string {
 	dataStr := zkv.serializeData(data)
 	hash := sha256.Sum256([]byte(dataStr))
 	return hex.EncodeToString(hash[:])
@@ -425,52 +453,141 @@ func (zkv *ZKVerifier) calculateChallenge(R *big.Int, publicData map[string]inte
 	return new(big.Int).SetBytes(hash[:])
 }
 
-// extractSecretValue 提取秘密值
-func (zkv *ZKVerifier) extractSecretValue(secretData map[string]interface{}) *big.Int {
-	// 从秘密数据中提取数值
-	// 这里使用简化的方法
-	if value, ok := secretData["secret_value"].(int); ok {
-		return big.NewInt(int64(value))
+// deriveSecretScalar 基于秘密数据派生Schnorr私钥
+func (zkv *ZKVerifier) deriveSecretScalar(secretData map[string]interface{}) *big.Int {
+	hashHex := zkv.calculateHash(secretData)
+	scalar := new(big.Int)
+	if _, ok := scalar.SetString(hashHex, 16); !ok {
+		return big.NewInt(1)
 	}
-	return big.NewInt(1)
+	scalar.Mod(scalar, zkv.prime)
+	if scalar.Sign() == 0 {
+		return big.NewInt(1)
+	}
+	return scalar
 }
 
 // serializeData 序列化数据
-func (zkv *ZKVerifier) serializeData(data map[string]interface{}) string {
-	// 简化的数据序列化
-	result := ""
-	for key, value := range data {
-		result += fmt.Sprintf("%s:%v;", key, value)
+func (zkv *ZKVerifier) serializeData(data interface{}) string {
+	normalized := normalizeValue(data)
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return ""
 	}
-	return result
+	return string(encoded)
 }
 
 // convertToStringMap 转换为字符串映射
 func (zkv *ZKVerifier) convertToStringMap(data map[string]interface{}) map[string]string {
-	result := make(map[string]string)
+	result := make(map[string]string, len(data))
 	for key, value := range data {
 		result[key] = fmt.Sprintf("%v", value)
 	}
 	return result
 }
 
+func cloneMap(src map[string]interface{}) map[string]interface{} {
+	dst := make(map[string]interface{}, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func convertToInterfaceMap(input map[string]string) map[string]interface{} {
+	result := make(map[string]interface{}, len(input))
+	for key, value := range input {
+		result[key] = value
+	}
+	return result
+}
+
+func normalizeValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		ordered := make([]normalizedPair, 0, len(keys))
+		for _, key := range keys {
+			ordered = append(ordered, normalizedPair{Key: key, Value: normalizeValue(v[key])})
+		}
+		return ordered
+	case map[string]string:
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		ordered := make([]normalizedPair, 0, len(keys))
+		for _, key := range keys {
+			ordered = append(ordered, normalizedPair{Key: key, Value: v[key]})
+		}
+		return ordered
+	case []interface{}:
+		normalized := make([]interface{}, len(v))
+		for i := range v {
+			normalized[i] = normalizeValue(v[i])
+		}
+		return normalized
+	case []map[string]interface{}:
+		normalized := make([]interface{}, len(v))
+		for i := range v {
+			normalized[i] = normalizeValue(v[i])
+		}
+		return normalized
+	case []string:
+		normalized := make([]interface{}, len(v))
+		for i := range v {
+			normalized[i] = v[i]
+		}
+		return normalized
+	default:
+		return v
+	}
+}
+
+type normalizedPair struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
+}
+
 // validateProof 验证证明
-func (zkv *ZKVerifier) validateProof(proof *ZKProof) error {
-	// 验证时间戳
-	if time.Now().Unix()-proof.Timestamp > 3600 { // 1小时过期
+func (zkv *ZKVerifier) validateProof(proof *ZKProof, metadata map[string]interface{}) error {
+	now := time.Now()
+	proofTime := time.Unix(proof.Timestamp, 0)
+
+	if proofTime.After(now.Add(proofFutureSkew)) {
+		return fmt.Errorf("proof timestamp invalid")
+	}
+
+	if proofExpiryWindow > 0 && now.Sub(proofTime) > proofExpiryWindow {
 		return fmt.Errorf("proof expired")
 	}
 
-	// 验证哈希
-	expectedHash := zkv.calculateHash(map[string]interface{}{
-		"proof":       proof.Proof,
-		"public_data": proof.PublicData,
-		"timestamp":   proof.Timestamp,
-		"nonce":       proof.Nonce,
-	})
+	// 验证秘密数据哈希
+	computedSecretHash := zkv.calculateHash(metadata)
+	if computedSecretHash != proof.SecretHash {
+		return fmt.Errorf("secret hash mismatch")
+	}
 
+	// 验证承诺哈希
+	commitmentPayload := map[string]interface{}{
+		"secret_hash": proof.SecretHash,
+		"public_data": convertToInterfaceMap(proof.PublicData),
+		"nonce":       proof.Nonce,
+		"timestamp":   proof.Timestamp,
+	}
+	expectedHash := zkv.calculateHash(commitmentPayload)
 	if expectedHash != proof.Hash {
 		return fmt.Errorf("proof hash mismatch")
+	}
+
+	// 验证Schnorr签名
+	if !zkv.verifySchnorrProof(proof.Proof, convertToInterfaceMap(proof.PublicData), proof.PublicKey) {
+		return fmt.Errorf("invalid Schnorr proof")
 	}
 
 	return nil
@@ -503,6 +620,6 @@ func (zkv *ZKVerifier) GeneratePrivacyProof(userData map[string]interface{}) (*Z
 }
 
 // VerifyPrivacyProof 验证隐私保护证明
-func (zkv *ZKVerifier) VerifyPrivacyProof(proof *ZKProof) (bool, error) {
-	return zkv.validateProof(proof) == nil, nil
+func (zkv *ZKVerifier) VerifyPrivacyProof(proof *ZKProof, secretData map[string]interface{}) (bool, error) {
+	return zkv.validateProof(proof, secretData) == nil, nil
 }

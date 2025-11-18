@@ -1,6 +1,9 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -40,11 +43,11 @@ func (h *AIHandler) GetModels(c *gin.Context) {
 
 // GenerateContent AI内容生成
 func (h *AIHandler) GenerateContent(c *gin.Context) {
-	var req ai.GenerationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		SendError(c, http.StatusBadRequest, "Invalid request", err.Error())
-		return
-	}
+    var req ai.GenerationRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        SendError(c, http.StatusBadRequest, "Invalid request", err.Error())
+        return
+    }
 
 	// 生成内容
 	response, err := h.aiEngine.GenerateArt(req)
@@ -89,11 +92,19 @@ func (h *AIHandler) GenerateContent(c *gin.Context) {
 
 	// 上传证明到IPFS
 	proofData := map[string]interface{}{
-		"proof":              proof.Proof,
-		"public_data":        proof.Proof.PublicData,
-		"contribution_score": proof.ContributionScore,
+		"creation_id":        proof.CreationID,
 		"process_hash":       proof.ProcessHash,
+		"contribution_score": proof.ContributionScore,
 		"metadata":           proof.Metadata,
+		"proof": map[string]interface{}{
+			"proof":       proof.Proof.Proof,
+			"public_data": proof.Proof.PublicData,
+			"timestamp":   proof.Proof.Timestamp,
+			"nonce":       proof.Proof.Nonce,
+			"hash":        proof.Proof.Hash,
+			"secret_hash": proof.Proof.SecretHash,
+			"public_key":  proof.Proof.PublicKey,
+		},
 	}
 
 	proofResponse, err := h.ipfsClient.UploadProof(proofData, response.ID)
@@ -120,6 +131,38 @@ func (h *AIHandler) GenerateContent(c *gin.Context) {
 	})
 }
 
+// GenerateText 文本生成
+func (h *AIHandler) GenerateText(c *gin.Context) {
+    var req ai.GenerationRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        SendError(c, http.StatusBadRequest, "Invalid request", err.Error())
+        return
+    }
+    req.Task = "text"
+    response, err := h.aiEngine.GenerateArt(req)
+    if err != nil {
+        SendError(c, http.StatusInternalServerError, "Generation failed", err.Error())
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{ "success": true, "data": response })
+}
+
+// GenerateImage 图像生成
+func (h *AIHandler) GenerateImage(c *gin.Context) {
+    var req ai.GenerationRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        SendError(c, http.StatusBadRequest, "Invalid request", err.Error())
+        return
+    }
+    req.Task = "image"
+    response, err := h.aiEngine.GenerateArt(req)
+    if err != nil {
+        SendError(c, http.StatusInternalServerError, "Generation failed", err.Error())
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{ "success": true, "data": response })
+}
+
 // VerifyProof 验证零知识证明
 func (h *AIHandler) VerifyProof(c *gin.Context) {
 	hash := c.Param("hash")
@@ -137,11 +180,48 @@ func (h *AIHandler) VerifyProof(c *gin.Context) {
 	}
 
 	// 重构证明对象
+	creationID, ok := proofData["creation_id"].(string)
+	if !ok || creationID == "" {
+		SendError(c, http.StatusBadRequest, "Invalid proof", "creation_id missing")
+		return
+	}
+
+	processHash, ok := proofData["process_hash"].(string)
+	if !ok {
+		SendError(c, http.StatusBadRequest, "Invalid proof", "process_hash missing")
+		return
+	}
+
+	contributionScore, err := parseNumericToInt(proofData["contribution_score"])
+	if err != nil {
+		SendError(c, http.StatusBadRequest, "Invalid proof", err.Error())
+		return
+	}
+
+	metadata, ok := proofData["metadata"].(map[string]interface{})
+	if !ok {
+		SendError(c, http.StatusBadRequest, "Invalid proof", "metadata missing")
+		return
+	}
+
+	rawProof, ok := proofData["proof"].(map[string]interface{})
+	if !ok {
+		SendError(c, http.StatusBadRequest, "Invalid proof", "proof payload missing")
+		return
+	}
+
+	zkProof, err := buildZKProofFromMap(rawProof)
+	if err != nil {
+		SendError(c, http.StatusBadRequest, "Invalid proof", err.Error())
+		return
+	}
+
 	proof := &zkp.CreationProof{
-		CreationID:         proofData["creation_id"].(string),
-		ProcessHash:        proofData["process_hash"].(string),
-		ContributionScore:  int(proofData["contribution_score"].(float64)),
-		Metadata:           proofData["metadata"].(map[string]interface{}),
+		CreationID:         creationID,
+		ProcessHash:        processHash,
+		ContributionScore:  contributionScore,
+		Metadata:           metadata,
+		Proof:              *zkProof,
 		VerificationStatus: "pending",
 	}
 
@@ -159,6 +239,109 @@ func (h *AIHandler) VerifyProof(c *gin.Context) {
 			"proof":    proof,
 		},
 	})
+}
+
+func parseNumericToInt(value interface{}) (int, error) {
+	int64Value, err := parseNumericToInt64(value)
+	if err != nil {
+		return 0, err
+	}
+	if strconv.IntSize == 32 {
+		if int64Value > int64(math.MaxInt32) || int64Value < int64(math.MinInt32) {
+			return 0, fmt.Errorf("value out of int range")
+		}
+	}
+	return int(int64Value), nil
+}
+
+func parseNumericToInt64(value interface{}) (int64, error) {
+	switch v := value.(type) {
+	case int:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("invalid numeric value")
+		}
+		truncated := math.Trunc(v)
+		if math.Abs(v-truncated) > 1e-9 {
+			return 0, fmt.Errorf("numeric value must be an integer")
+		}
+		return int64(truncated), nil
+	case json.Number:
+		parsed, err := v.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("invalid json number")
+		}
+		return parsed, nil
+	case string:
+		parsed, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse numeric string")
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("unsupported numeric type")
+	}
+}
+
+func buildZKProofFromMap(data map[string]interface{}) (*zkp.ZKProof, error) {
+	proofStr, ok := data["proof"].(string)
+	if !ok {
+		return nil, fmt.Errorf("proof string missing")
+	}
+
+	publicDataMap := make(map[string]string)
+	switch raw := data["public_data"].(type) {
+	case map[string]interface{}:
+		for key, value := range raw {
+			publicDataMap[key] = fmt.Sprintf("%v", value)
+		}
+	case map[string]string:
+		for key, value := range raw {
+			publicDataMap[key] = value
+		}
+	default:
+		return nil, fmt.Errorf("public_data missing or invalid")
+	}
+
+	timestamp, err := parseNumericToInt64(data["timestamp"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid timestamp: %w", err)
+	}
+
+	nonce, ok := data["nonce"].(string)
+	if !ok {
+		return nil, fmt.Errorf("nonce missing")
+	}
+
+	hashValue, ok := data["hash"].(string)
+	if !ok {
+		return nil, fmt.Errorf("hash missing")
+	}
+
+	secretHash, ok := data["secret_hash"].(string)
+	if !ok {
+		return nil, fmt.Errorf("secret_hash missing")
+	}
+
+	publicKey, ok := data["public_key"].(string)
+	if !ok {
+		return nil, fmt.Errorf("public_key missing")
+	}
+
+	return &zkp.ZKProof{
+		Proof:      proofStr,
+		PublicData: publicDataMap,
+		Timestamp:  timestamp,
+		Nonce:      nonce,
+		Hash:       hashValue,
+		SecretHash: secretHash,
+		PublicKey:  publicKey,
+	}, nil
 }
 
 // GetIPFSContent 获取IPFS内容
@@ -518,10 +701,12 @@ func SetupAIRoutes(router *gin.Engine, aiHandler *AIHandler) {
 		ai.POST("/upload-analyze", aiHandler.UploadAndAnalyze)
 
 		// 需要认证的路由
-		authed := ai.Group("/")
-		authed.Use(AuthMiddleware())
-		{
-			authed.POST("/generate", aiHandler.GenerateContent)
-		}
-	}
+        authed := ai.Group("/")
+        authed.Use(AuthMiddleware())
+        {
+            authed.POST("/generate", aiHandler.GenerateContent)
+            authed.POST("/generate-text", aiHandler.GenerateText)
+            authed.POST("/generate-image", aiHandler.GenerateImage)
+        }
+    }
 }
