@@ -59,6 +59,7 @@ Thumbs.db
 *.swp
 *.swo
 .trae/
+.claude/
 
 # 测试覆盖率
 coverage/
