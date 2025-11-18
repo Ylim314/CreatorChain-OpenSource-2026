@@ -28,6 +28,7 @@ type LoginRequest struct {
 	Address   string `json:"address" binding:"required"`
 	Signature string `json:"signature" binding:"required"`
 	Message   string `json:"message" binding:"required"`
+	Timestamp string `json:"timestamp" binding:"required"`
 }
 
 // LoginResponse 登录响应
@@ -45,7 +46,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 
 	// 验证用户身份
-	token, err := h.userService.AuthenticateUser(req.Address, req.Signature)
+	token, err := h.userService.AuthenticateUser(req.Address, req.Message, req.Signature, req.Timestamp)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication failed"})
 		return

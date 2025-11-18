@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"creatorchain-backend/internal/repository"
+	"creatorchain-backend/internal/security"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 )
@@ -24,7 +23,7 @@ type UserService interface {
 	CreateUser(user *repository.User) error
 	GetUserByAddress(address string) (*repository.User, error)
 	UpdateUser(user *repository.User) error
-	AuthenticateUser(address, signature string) (string, error)
+	AuthenticateUser(address, message, signature, timestamp string) (string, error)
 	Register(address string) (*repository.User, error)
 	Login(address string) (string, error)
 	GetUser(address string) (*repository.User, error)
@@ -39,6 +38,11 @@ type userService struct {
 	redis     *redis.Client
 	jwtSecret string
 }
+
+var (
+	loginTimestampWindow = 5 * time.Minute
+	loginTimestampGuard  = security.NewTimestampGuard()
+)
 
 // NewUserService 创建用户服务
 func NewUserService(userRepo repository.UserRepository, redis *redis.Client) UserService {
@@ -67,7 +71,7 @@ func (s *userService) UpdateUser(user *repository.User) error {
 }
 
 // AuthenticateUser 验证用户身份 - 企业级安全实现
-func (s *userService) AuthenticateUser(address, signature string) (string, error) {
+func (s *userService) AuthenticateUser(address, message, signature, timestamp string) (string, error) {
 	// 验证以太坊地址格式
 	if !isValidEthereumAddress(address) {
 		return "", errors.New("invalid ethereum address")
@@ -78,9 +82,21 @@ func (s *userService) AuthenticateUser(address, signature string) (string, error
 		return "", errors.New("invalid signature format")
 	}
 
-	// 验证以太坊签名
-	if !s.verifyEthereumSignature(address, signature) {
-		return "", errors.New("signature verification failed")
+	tsValue, err := security.ValidateTimestamp(timestamp, loginTimestampWindow)
+	if err != nil {
+		return "", err
+	}
+
+	if err := security.ValidateSignedMessage(address, timestamp, message); err != nil {
+		return "", err
+	}
+
+	if !loginTimestampGuard.CheckAndStore(address, tsValue) {
+		return "", errors.New("timestamp already used")
+	}
+
+	if err := security.VerifySignature(address, message, signature); err != nil {
+		return "", err
 	}
 
 	// 生成JWT token
@@ -185,36 +201,6 @@ func isValidEthereumAddress(address string) bool {
 // isValidSignature 验证签名格式
 func isValidSignature(signature string) bool {
 	return len(signature) == 132 && strings.HasPrefix(signature, "0x")
-}
-
-// verifyEthereumSignature 验证以太坊签名
-func (s *userService) verifyEthereumSignature(address, signature string) bool {
-	// 验证地址格式
-	if !common.IsHexAddress(address) {
-		return false
-	}
-
-	// 移除0x前缀
-	sigBytes, err := hex.DecodeString(signature[2:])
-	if err != nil || len(sigBytes) != 65 {
-		return false
-	}
-
-	// 构造签名消息（使用标准格式）
-	message := fmt.Sprintf("Welcome to CreatorChain!\n\nThis request will not trigger a blockchain transaction or cost any gas fees.\n\nWallet address:\n%s", address)
-	messageHash := crypto.Keccak256Hash([]byte(fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(message), message)))
-
-	// 恢复公钥
-	pubKey, err := crypto.SigToPub(messageHash.Bytes(), sigBytes)
-	if err != nil {
-		return false
-	}
-
-	// 验证地址
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-	expectedAddr := common.HexToAddress(address)
-
-	return recoveredAddr == expectedAddr
 }
 
 // generateJWTToken 生成JWT token

@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -10,7 +12,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// SecurityConfig 安全配置
+// SecurityConfig holds middleware-related toggles.
 type SecurityConfig struct {
 	EnableRateLimit bool
 	RateLimit       *rate.Limiter
@@ -18,7 +20,7 @@ type SecurityConfig struct {
 	MaxRequestSize  int64
 }
 
-// RateLimitMiddleware 速率限制中间件
+// RateLimitMiddleware applies a simple token-bucket limiter.
 func RateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !limiter.Allow() {
@@ -33,33 +35,53 @@ func RateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
 	}
 }
 
-// SecureCORSMiddleware 安全的CORS中间件
+// SecureCORSMiddleware enforces an allow list for browser origins while keeping credentials optional.
 func SecureCORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
+	normalized := make([]string, 0, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			normalized = append(normalized, trimmed)
+		}
+	}
+	allowAll := len(normalized) == 0
+
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
+		originAllowed := allowAll
 
-		// 检查origin是否在允许列表中
-		if origin != "" {
-			allowed := false
-			for _, allowedOrigin := range allowedOrigins {
-				if origin == allowedOrigin {
-					allowed = true
+		if !allowAll && origin != "" {
+			for _, allowed := range normalized {
+				if origin == allowed {
+					originAllowed = true
 					break
 				}
 			}
+		}
 
-			if allowed {
-				c.Header("Access-Control-Allow-Origin", origin)
-			}
+		if !originAllowed && origin != "" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "Origin not allowed",
+				"message": "This domain is not permitted to access the API",
+			})
+			return
+		}
+
+		if allowAll {
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Credentials", "false")
+		} else if origin != "" {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Vary", "Origin")
 		}
 
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, User-Address, Signature, Message, Timestamp")
 		c.Header("Access-Control-Expose-Headers", "Content-Length")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Max-Age", "86400") // 24小时
+		c.Header("Access-Control-Max-Age", "86400")
 
-		if c.Request.Method == "OPTIONS" {
+		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
@@ -68,10 +90,10 @@ func SecureCORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	}
 }
 
-// RequestSizeLimitMiddleware 请求大小限制中间件
+// RequestSizeLimitMiddleware guards against large payloads.
 func RequestSizeLimitMiddleware(maxSize int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.ContentLength > maxSize {
+		if maxSize > 0 && c.Request.ContentLength > maxSize {
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
 				"error":   "Request too large",
 				"message": fmt.Sprintf("Request size exceeds limit of %d bytes", maxSize),
@@ -83,47 +105,58 @@ func RequestSizeLimitMiddleware(maxSize int64) gin.HandlerFunc {
 	}
 }
 
-// SecurityHeadersMiddleware 安全头中间件
+// SecurityHeadersMiddleware adds a baseline set of hardening headers.
 func SecurityHeadersMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 防止点击劫持
 		c.Header("X-Frame-Options", "DENY")
-
-		// 防止MIME类型嗅探
 		c.Header("X-Content-Type-Options", "nosniff")
-
-		// XSS保护
 		c.Header("X-XSS-Protection", "1; mode=block")
-
-		// 强制HTTPS (生产环境)
 		if c.Request.TLS != nil {
 			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
-
-		// 内容安全策略
 		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-
-		// 引用者策略
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-
 		c.Next()
 	}
 }
 
-// IPWhitelistMiddleware IP白名单中间件
+// IPWhitelistMiddleware allows requests only from the configured set.
 func IPWhitelistMiddleware(allowedIPs []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
-
-		// 如果没有配置白名单，允许所有IP
 		if len(allowedIPs) == 0 {
 			c.Next()
 			return
 		}
 
+		clientIPStr := c.ClientIP()
+		clientIP := net.ParseIP(clientIPStr)
+		if clientIP == nil {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":   "Access denied",
+				"message": "Unable to parse client IP",
+			})
+			c.Abort()
+			return
+		}
+
 		allowed := false
-		for _, allowedIP := range allowedIPs {
-			if clientIP == allowedIP || strings.HasPrefix(clientIP, allowedIP) {
+		for _, entry := range allowedIPs {
+			rule := strings.TrimSpace(entry)
+			if rule == "" {
+				continue
+			}
+			if rule == "*" {
+				allowed = true
+				break
+			}
+			if strings.Contains(rule, "/") {
+				if _, network, err := net.ParseCIDR(rule); err == nil && network.Contains(clientIP) {
+					allowed = true
+					break
+				}
+				continue
+			}
+			if ip := net.ParseIP(rule); ip != nil && ip.Equal(clientIP) {
 				allowed = true
 				break
 			}
@@ -142,25 +175,43 @@ func IPWhitelistMiddleware(allowedIPs []string) gin.HandlerFunc {
 	}
 }
 
-// RequestTimeoutMiddleware 请求超时中间件
+// RequestTimeoutMiddleware cancels handlers that exceed the configured duration.
 func RequestTimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 设置请求超时
-		c.Request = c.Request.WithContext(c.Request.Context())
+	if timeout <= 0 {
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
 
-		// 这里可以添加超时逻辑
-		// 实际实现需要结合context.WithTimeout
-		c.Next()
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
+		defer cancel()
+
+		c.Request = c.Request.WithContext(ctx)
+
+		finished := make(chan struct{})
+		go func() {
+			c.Next()
+			close(finished)
+		}()
+
+		select {
+		case <-finished:
+			return
+		case <-ctx.Done():
+			c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
+				"error":   "Request timeout",
+				"message": fmt.Sprintf("Request exceeded timeout of %s", timeout),
+			})
+		}
 	}
 }
 
-// InputSanitizationMiddleware 输入清理中间件
+// InputSanitizationMiddleware performs basic query sanitization.
 func InputSanitizationMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 清理查询参数
 		for _, values := range c.Request.URL.Query() {
 			for i, value := range values {
-				// 移除潜在的恶意字符
 				cleaned := strings.ReplaceAll(value, "<script>", "")
 				cleaned = strings.ReplaceAll(cleaned, "javascript:", "")
 				cleaned = strings.ReplaceAll(cleaned, "data:", "")
@@ -172,12 +223,10 @@ func InputSanitizationMiddleware() gin.HandlerFunc {
 	}
 }
 
-// AuditLogMiddleware 审计日志中间件
+// AuditLogMiddleware emits a basic audit trail for each request.
 func AuditLogMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
-
-		// 记录请求信息
 		logData := map[string]interface{}{
 			"method":     c.Request.Method,
 			"path":       c.Request.URL.Path,
@@ -186,18 +235,14 @@ func AuditLogMiddleware() gin.HandlerFunc {
 			"timestamp":  start.Unix(),
 		}
 
-		// 如果有用户地址，记录
 		if userAddr := c.GetHeader("User-Address"); userAddr != "" {
 			logData["user_address"] = userAddr
 		}
 
 		c.Next()
 
-		// 记录响应信息
 		logData["status"] = c.Writer.Status()
 		logData["duration"] = time.Since(start).Milliseconds()
-
-		// 这里可以发送到日志系统
 		fmt.Printf("AUDIT: %+v\n", logData)
 	}
 }

@@ -1,18 +1,21 @@
 package api
 
 import (
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"creatorchain-backend/internal/security"
+
 	"github.com/gin-gonic/gin"
+)
+
+var (
+	requestTimestampWindow = 5 * time.Minute
+	requestTimestampGuard  = security.NewTimestampGuard()
 )
 
 // LoggerMiddleware 请求日志中间件
@@ -72,22 +75,39 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 验证时间戳（防止重放攻击）
-		//h后来增加的部分，之前没考虑过这个问题
-		if !isValidTimestamp(timestamp) {
+		tsValue, err := security.ValidateTimestamp(timestamp, requestTimestampWindow)
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error":   "Invalid timestamp",
-				"message": "Request timestamp is too old or invalid",
+				"message": err.Error(),
+			})
+			c.Abort()
+			return
+		}
+
+		if err := security.ValidateSignedMessage(userAddress, timestamp, message); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Invalid signed message",
+				"message": err.Error(),
+			})
+			c.Abort()
+			return
+		}
+
+		if !requestTimestampGuard.CheckAndStore(userAddress, tsValue) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Replay detected",
+				"message": "Timestamp already used",
 			})
 			c.Abort()
 			return
 		}
 
 		// 验证以太坊签名，这个地方最复杂
-		if !verifyEthereumSignature(userAddress, message, signature) {
+		if err := security.VerifySignature(userAddress, message, signature); err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "Invalid signature",
-				"message": "Signature verification failed",
+				"message": err.Error(),
 			})
 			c.Abort()
 			return
@@ -115,59 +135,6 @@ func isValidEthereumAddress(address string) bool {
 		}
 	}
 	return true
-}
-
-// isValidTimestamp 验证时间戳（我设置的是5分钟内有效）
-func isValidTimestamp(timestampStr string) bool {
-	timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
-	if err != nil {
-		return false
-	}
-
-	now := time.Now().Unix()
-	diff := now - timestamp
-
-	// 允许5分钟的时间差
-	return diff >= 0 && diff <= 300
-}
-
-// verifyEthereumSignature 验证以太坊签名，这个函数参考了go-ethereum的源码
-func verifyEthereumSignature(address, message, signature string) bool {
-	// 验证地址格式
-	if !common.IsHexAddress(address) {
-		return false
-	}
-
-	// 验证签名格式
-	if !strings.HasPrefix(signature, "0x") || len(signature) != 132 {
-		return false
-	}
-
-	// 移除0x前缀
-	sigBytes, err := hex.DecodeString(signature[2:])
-	if err != nil {
-		return false
-	}
-
-	// 验证签名长度
-	if len(sigBytes) != 65 {
-		return false
-	}
-
-	// 计算消息哈希
-	messageHash := crypto.Keccak256Hash([]byte(message))
-
-	// 恢复公钥
-	pubKey, err := crypto.SigToPub(messageHash.Bytes(), sigBytes)
-	if err != nil {
-		return false
-	}
-
-	// 验证地址
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-	expectedAddr := common.HexToAddress(address)
-
-	return recoveredAddr == expectedAddr
 }
 
 // ValidateJSONMiddleware JSON验证中间件

@@ -54,6 +54,9 @@ type Config struct {
 	// CORS配置
 	CORSOrigins     []string
 	CORSCredentials bool
+
+	// 请求超时
+	RequestTimeoutSeconds int
 }
 
 // LoadConfig 加载配置
@@ -102,6 +105,9 @@ func LoadConfig() *Config {
 		// CORS配置
 		CORSOrigins:     getEnvAsSlice("CORS_ORIGINS", []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:3002"}),
 		CORSCredentials: getEnvAsBool("CORS_CREDENTIALS", true),
+
+		// 请求超时
+		RequestTimeoutSeconds: getEnvAsInt("REQUEST_TIMEOUT_SECONDS", 30),
 	}
 
 	// 验证关键配置
@@ -196,6 +202,11 @@ func validateConfig(config *Config) {
 	if len(config.CORSOrigins) == 0 {
 		log.Printf("Warning: No CORS origins configured, using localhost defaults")
 		config.CORSOrigins = []string{"http://localhost:3000", "http://localhost:3001"}
+	}
+
+	if config.RequestTimeoutSeconds < 0 {
+		log.Printf("Warning: REQUEST_TIMEOUT_SECONDS cannot be negative, using default 30")
+		config.RequestTimeoutSeconds = 30
 	}
 
 	log.Println("✅ Configuration validation completed")
