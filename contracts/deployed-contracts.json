@@ -1,0 +1,18 @@
+{
+  "network": "ganache",
+  "chainId": "1337",
+  "deployer": "0x35c56C8b352D21529cF032Cb8f06536489ccAEf9",
+  "timestamp": "2025-11-28T08:14:23.198Z",
+  "contracts": {
+    "CreatorToken": "0x736d7eeA048025e5577ba5e02663756829e71f15",
+    "CreatorNFT": "0xa1C845453b9f7F284Fe77aa44a1258121E5e2e0f",
+    "LicenseManager": "0x58F54Eb22e2752356C9070Dc658E2db3a20ebC68",
+    "CreatorDAO": "0xCef13C7f71E48448A6eC8100aEC90f198865C340"
+  },
+  "configuration": {
+    "platformFee": "2.5%",
+    "defaultRoyalty": "5%",
+    "votingPeriod": "7 days",
+    "proposalThreshold": "10000 CRT"
+  }
+}

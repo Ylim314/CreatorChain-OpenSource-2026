@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -46,9 +47,18 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 
 	// 验证用户身份
+	// 记录请求信息以便调试
+	log.Printf("Login request: address=%s, messageLength=%d, signatureLength=%d, timestamp=%s", 
+		req.Address, len(req.Message), len(req.Signature), req.Timestamp)
+	
 	token, err := h.userService.AuthenticateUser(req.Address, req.Message, req.Signature, req.Timestamp)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication failed"})
+		// 返回详细的错误信息，帮助调试
+		log.Printf("Authentication failed: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "Authentication failed",
+			"message": err.Error(),
+		})
 		return
 	}
 

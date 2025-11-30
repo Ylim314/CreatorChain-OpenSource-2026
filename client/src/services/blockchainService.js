@@ -18,7 +18,8 @@ const CONTRACT_ADDRESSES = {
   11155111: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Sepolia 测试网
   137: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Polygon 主网
   80001: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Polygon Mumbai 测试网
-  1337: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // 本地网络 - 新部署的合约地址
+  1337: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Hardhat 本地网络 - SimpleCreationRegistry 合约地址
+  5777: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Ganache 本地网络 - SimpleCreationRegistry 合约地址
 };
 
 // 获取有效的合约地址（自动校验和格式化）
@@ -80,10 +81,21 @@ class BlockchainService {
         this.signer
       );
 
+      // 验证合约是否可访问
+      try {
+        // 尝试调用一个 view 函数来验证合约
+        const testCall = await this.contract.getCreation(0).catch(() => null);
+        console.log('合约验证:', testCall !== null ? '成功' : '合约可能不存在或函数调用失败');
+      } catch (verifyError) {
+        console.warn('合约验证警告（可能正常，如果合约中还没有创作记录）:', verifyError.message);
+      }
+
       console.log('区块链服务初始化成功:', {
         chainId: this.chainId,
         contractAddress,
-        signerAddress: await this.signer.getAddress()
+        contractAddressFormatted: getAddress(contractAddress),
+        signerAddress: await this.signer.getAddress(),
+        networkName: network.name
       });
 
       return this;
@@ -142,29 +154,67 @@ class BlockchainService {
 
       // 检查网络是否支持EIP-1559
       const network = await this.provider.getNetwork();
-      const isEIP1559Supported = network.chainId !== 1337n; // Ganache通常使用chainId 1337
+      const isLocalNetwork = network.chainId === 1337n || network.chainId === 5777n; // Ganache/Hardhat 本地网络
+      const isEIP1559Supported = !isLocalNetwork;
+
+      // 获取当前网络的 Gas 价格建议
+      let feeData;
+      try {
+        feeData = await this.provider.getFeeData();
+      } catch (feeError) {
+        console.warn('获取 Gas 价格失败，使用默认值:', feeError);
+        feeData = null;
+      }
 
       // 根据网络类型配置交易参数
       let txOptions = {
         gasLimit: gasEstimate + 50000n // 增加额外的gas缓冲
       };
 
-      if (isEIP1559Supported) {
+      if (isEIP1559Supported && feeData?.maxFeePerGas) {
         // 支持EIP-1559的网络（如以太坊主网、测试网）
-        txOptions.maxFeePerGas = 20000000000n; // 20 gwei
-        txOptions.maxPriorityFeePerGas = 1000000000n; // 1 gwei
+        txOptions.maxFeePerGas = feeData.maxFeePerGas;
+        txOptions.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || 1000000000n; // 1 gwei
+      } else if (isLocalNetwork) {
+        // 本地网络（Ganache/Hardhat）- 使用非常低的 Gas 价格
+        // Ganache 通常接受 0 或非常低的价格
+        txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 使用网络建议或默认 20 gwei
       } else {
-        // 不支持EIP-1559的网络（如Ganache）
-        txOptions.gasPrice = 20000000000n; // 20 gwei
+        // 不支持EIP-1559的其他网络
+        txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 20 gwei
       }
 
       console.log('交易配置:', {
-        chainId: network.chainId,
+        chainId: network.chainId.toString(),
+        isLocalNetwork,
         isEIP1559Supported,
-        txOptions
+        contractAddress: this.contract.target,
+        signerAddress: await this.signer.getAddress(),
+        txOptions: {
+          ...txOptions,
+          gasLimit: txOptions.gasLimit.toString(),
+          gasPrice: txOptions.gasPrice?.toString(),
+          maxFeePerGas: txOptions.maxFeePerGas?.toString(),
+          maxPriorityFeePerGas: txOptions.maxPriorityFeePerGas?.toString()
+        },
+        feeData: feeData ? {
+          gasPrice: feeData.gasPrice?.toString(),
+          maxFeePerGas: feeData.maxFeePerGas?.toString(),
+          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString()
+        } : null
+      });
+
+      // 验证交易参数
+      console.log('交易参数验证:', {
+        title: metadata.title,
+        description: metadata.description?.substring(0, 50) + '...',
+        ipfsHash: metadata.fileHash,
+        creationType: metadata.creationType || 0,
+        contentHash: contentHash
       });
 
       // 执行交易
+      console.log('正在发送交易到 MetaMask...');
       const tx = await this.contract.registerCreation(
         metadata.title,
         metadata.description,
@@ -173,6 +223,8 @@ class BlockchainService {
         contentHash,
         txOptions
       );
+      
+      console.log('交易已发送，交易哈希:', tx.hash);
 
       toast('交易已提交，等待确认...');
 
@@ -190,13 +242,26 @@ class BlockchainService {
       };
 
     } catch (error) {
-      console.error('注册创作失败:', error);
+      console.error('注册创作失败 - 详细错误信息:', {
+        error: error,
+        code: error.code,
+        message: error.message,
+        reason: error.reason,
+        data: error.data,
+        transaction: error.transaction,
+        receipt: error.receipt
+      });
 
       // 详细的错误处理
       if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
         toast.error('用户取消了交易');
+        throw new Error('用户取消了交易');
       } else if (error.code === 'INSUFFICIENT_FUNDS' || error.code === -32000) {
-        toast.error('余额不足支付Gas费用');
+        toast.error('余额不足支付Gas费用，请确保钱包有足够的ETH');
+        throw new Error('余额不足支付Gas费用');
+      } else if (error.message?.includes('user rejected') || error.message?.includes('User denied')) {
+        toast.error('您拒绝了交易请求');
+        throw new Error('用户拒绝了交易请求');
       } else if (error.code === -32602 || error.message?.includes('EIP-1559')) {
         console.warn('EIP-1559不兼容错误，可能是网络配置问题，尝试模拟模式');
         // 降级到模拟模式
@@ -265,34 +330,74 @@ class BlockchainService {
 
       // 检查网络是否支持EIP-1559
       const network = await this.provider.getNetwork();
-      const isEIP1559Supported = network.chainId !== 1337n;
+      const isLocalNetwork = network.chainId === 1337n || network.chainId === 5777n; // Ganache/Hardhat 本地网络
+      const isEIP1559Supported = !isLocalNetwork;
+
+      // 获取当前网络的 Gas 价格建议
+      let feeData;
+      try {
+        feeData = await this.provider.getFeeData();
+      } catch (feeError) {
+        console.warn('获取 Gas 价格失败，使用默认值:', feeError);
+        feeData = null;
+      }
 
       // 根据网络类型配置交易参数
       let txOptions = {
         gasLimit: gasEstimate + 100000n // 增加较大的gas缓冲
       };
 
-      if (isEIP1559Supported) {
-        txOptions.maxFeePerGas = 20000000000n; // 20 gwei
-        txOptions.maxPriorityFeePerGas = 1000000000n; // 1 gwei
+      if (isEIP1559Supported && feeData?.maxFeePerGas) {
+        // 支持EIP-1559的网络（如以太坊主网、测试网）
+        txOptions.maxFeePerGas = feeData.maxFeePerGas;
+        txOptions.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || 1000000000n; // 1 gwei
+      } else if (isLocalNetwork) {
+        // 本地网络（Ganache/Hardhat）- 使用非常低的 Gas 价格
+        txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 使用网络建议或默认 20 gwei
       } else {
-        txOptions.gasPrice = 20000000000n; // 20 gwei
+        // 不支持EIP-1559的其他网络
+        txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 20 gwei
       }
 
       console.log('确认创作交易配置:', {
-        chainId: network.chainId,
+        chainId: network.chainId.toString(),
+        isLocalNetwork,
         isEIP1559Supported,
-        txOptions,
+        contractAddress: this.contract.target,
+        signerAddress: await this.signer.getAddress(),
+        txOptions: {
+          ...txOptions,
+          gasLimit: txOptions.gasLimit.toString(),
+          gasPrice: txOptions.gasPrice?.toString(),
+          maxFeePerGas: txOptions.maxFeePerGas?.toString(),
+          maxPriorityFeePerGas: txOptions.maxPriorityFeePerGas?.toString()
+        },
+        feeData: feeData ? {
+          gasPrice: feeData.gasPrice?.toString(),
+          maxFeePerGas: feeData.maxFeePerGas?.toString(),
+          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString()
+        } : null,
         creationId,
         finalIpfsHash: finalMetadata.finalIpfsHash
       });
 
+      // 验证交易参数
+      console.log('确认创作交易参数验证:', {
+        creationId,
+        finalIpfsHash: finalMetadata.finalIpfsHash,
+        finalContentHash: finalContentHash
+      });
+
+      // 执行交易
+      console.log('正在发送确认交易到 MetaMask...');
       const tx = await this.contract.confirmCreation(
         creationId,
         finalMetadata.finalIpfsHash,
         finalContentHash,
         txOptions
       );
+      
+      console.log('确认交易已发送，交易哈希:', tx.hash);
 
       toast('确认交易已提交，等待确认...');
       
@@ -308,13 +413,26 @@ class BlockchainService {
       };
 
     } catch (error) {
-      console.error('确认创作失败:', error);
+      console.error('确认创作失败 - 详细错误信息:', {
+        error: error,
+        code: error.code,
+        message: error.message,
+        reason: error.reason,
+        data: error.data,
+        transaction: error.transaction,
+        receipt: error.receipt
+      });
 
       // 详细的错误处理
       if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
         toast.error('用户取消了交易');
+        throw new Error('用户取消了交易');
       } else if (error.code === 'INSUFFICIENT_FUNDS' || error.code === -32000) {
-        toast.error('余额不足支付Gas费用');
+        toast.error('余额不足支付Gas费用，请确保钱包有足够的ETH');
+        throw new Error('余额不足支付Gas费用');
+      } else if (error.message?.includes('user rejected') || error.message?.includes('User denied')) {
+        toast.error('您拒绝了交易请求');
+        throw new Error('用户拒绝了交易请求');
       } else if (error.code === -32602 || error.message?.includes('EIP-1559')) {
         console.warn('EIP-1559不兼容错误，可能是网络配置问题，尝试模拟模式');
         // 降级到模拟模式
@@ -477,7 +595,8 @@ class BlockchainService {
       11155111: { name: 'Sepolia 测试网', symbol: 'ETH', explorer: 'https://sepolia.etherscan.io' },
       137: { name: 'Polygon 主网', symbol: 'MATIC', explorer: 'https://polygonscan.com' },
       80001: { name: 'Polygon Mumbai', symbol: 'MATIC', explorer: 'https://mumbai.polygonscan.com' },
-      1337: { name: '本地网络', symbol: 'ETH', explorer: 'http://localhost:8545' }
+      1337: { name: 'Hardhat 本地网络', symbol: 'ETH', explorer: 'http://localhost:8545' },
+      5777: { name: 'Ganache 本地网络', symbol: 'ETH', explorer: 'http://localhost:7545' }
     };
 
     return networks[this.chainId] || { 

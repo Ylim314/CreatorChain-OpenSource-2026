@@ -17,23 +17,19 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Switch,
   Divider
 } from '@mui/material';
 import { 
   CloudUpload,
-  Palette,
-  Description,
-  MusicNote,
-  VideoLibrary,
-  Code,
   CheckCircle
 } from '@mui/icons-material';
 import { useWeb3 } from '../context/Web3ContextFixed';
+import { useThemeMode } from '../context/ThemeModeContext';
 import { useNavigate } from 'react-router-dom';
 import { uploadToIPFS } from '../utils/ipfs';
-import PageLayout from '../components/ui/PageLayout';
-import { GlassCard } from '../components/ui/GlassCard';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import { Container } from '@mui/material';
 import logger from '../utils/logger';
 import blockchainService from '../services/blockchainService';
 import apiService from '../services/apiService';
@@ -92,6 +88,8 @@ const creationTools = [
 const ManualCreation = () => {
   const navigate = useNavigate();
   const { connected, account } = useWeb3();
+  const { mode } = useThemeMode();
+  const isDark = mode === 'dark';
   
   // 表单状态
   const [activeStep, setActiveStep] = useState(0);
@@ -250,13 +248,26 @@ const ManualCreation = () => {
       // 第五阶段：保存到后端数据库（可选）
       setSuccess('正在保存创作记录...');
       try {
-        await apiService.createCreation({
-          ...processMetadata,
-          blockchainTxHash: registrationResult.transactionHash,
-          creationId: registrationResult.creationId,
-          status: 'process_recorded',
-          gasUsed: registrationResult.gasUsed
-        });
+        // 构建符合后端API要求的请求数据
+        const backendCreationData = {
+          title: title,
+          description: description,
+          content_hash: fileHash, // 使用上传返回的路径作为content_hash
+          metadata_hash: fileHash, // 暂时使用相同的hash
+          image_url: fileHash, // 图片URL路径
+          ai_model: 'manual', // 手工创作
+          prompt_text: creationProcess || '手工创作作品',
+          contribution_score: 100, // 手工创作默认满分贡献度
+          creation_process_hash: '', // 将在确认时填充
+          intermediate_steps: JSON.stringify({
+            tools: tools,
+            creationTime: creationTime,
+            tags: tags
+          }),
+          final_confirmation: false,
+          verification_proof: ''
+        };
+        await apiService.createCreation(backendCreationData);
         console.log('数据库保存成功');
       } catch (dbError) {
         // 静默处理数据库错误，不影响用户体验
@@ -320,8 +331,10 @@ const ManualCreation = () => {
         title: title,
         description: description,
         type: 'manual',
-        creationType: creationType,
-        image: fileHash, // 保存上传后返回的图片路径或IPFS哈希
+        creationType: 'manual', // 标记为手工创作
+        image: fileHash, // 保存上传后返回的图片路径（如 /uploads/images/xxx）
+        image_url: fileHash, // 兼容后端字段名
+        category: creationType !== null ? manualCreationTypes[creationType].label : '其他',
         creationTypeLabel: creationType !== null ? manualCreationTypes[creationType].label : 'unknown',
         tags: tags,
         tools: tools,
@@ -329,11 +342,20 @@ const ManualCreation = () => {
         creator: account,
         fileHash: fileHash,
         metadataHash: metadataHash,
+        hash: fileHash, // 用于显示技术信息
         registrationTx: registrationResult.transactionHash,
         confirmationTx: confirmationResult.transactionHash,
         confirmed: true,
+        blockchainVerified: true, // 标记为区块链验证
+        status: 'published', // 标记为已发布
+        createdAt: new Date().toISOString().split('T')[0],
         timestamp: new Date().toISOString(),
-        localCreation: true
+        localCreation: true,
+        // 统计数据初始化
+        views: 0,
+        likes: 0,
+        downloads: 0,
+        price: 0
       };
 
       // 保存到localStorage
@@ -399,27 +421,52 @@ const ManualCreation = () => {
                 <Card 
                   sx={{
                     cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    border: creationType === type.value ? '2px solid #9c27b0' : '1px solid #e0e0e0',
-                    backgroundColor: creationType === type.value ? 'rgba(156, 39, 176, 0.1)' : 'background.paper',
+                    transition: 'all 0.2s ease',
+                    border: creationType === type.value 
+                      ? `2px solid ${isDark ? 'rgba(255,255,255,0.5)' : 'primary.main'}` 
+                      : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                    background: creationType === type.value 
+                      ? (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(25, 118, 210, 0.08)')
+                      : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)'),
+                    height: '100%',
                     '&:hover': {
-                      boxShadow: 3,
-                      transform: 'translateY(-2px)'
+                      transform: 'translateY(-4px)',
+                      boxShadow: isDark 
+                        ? '0 8px 24px rgba(0,0,0,0.3)' 
+                        : '0 8px 24px rgba(0,0,0,0.1)'
                     }
                   }}
                   onClick={() => setCreationType(type.value)}
                 >
-                  <CardContent sx={{ textAlign: 'center' }}>
+                  <CardContent sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="h3" sx={{ mb: 2 }}>
                       {type.icon}
                     </Typography>
-                    <Typography variant="h6" sx={{ mb: 2 }}>
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        mb: 1,
+                        fontWeight: 600,
+                        color: isDark ? 'white' : 'text.primary'
+                      }}
+                    >
                       {type.label}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        mb: 2,
+                        color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary'
+                      }}
+                    >
                       {type.description}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        color: isDark ? 'rgba(255,255,255,0.6)' : 'text.secondary'
+                      }}
+                    >
                       最大 {Math.round(type.maxSize / 1024 / 1024)}MB
                     </Typography>
                   </CardContent>
@@ -452,15 +499,37 @@ const ManualCreation = () => {
             </label>
             
             {file && (
-              <Card sx={{ mt: 4 }}>
+              <Card sx={{ 
+                mt: 4,
+                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
+              }}>
                 <CardContent>
-                  <Typography variant="h6" sx={{ mb: 2 }}>
-                    📁 {file.name}
+                  <Typography 
+                    variant="h6" 
+                    sx={{ 
+                      mb: 2,
+                      color: isDark ? 'white' : 'text.primary',
+                      fontWeight: 600
+                    }}
+                  >
+                    {file.name}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                      mb: 1
+                    }}
+                  >
                     大小: {(file.size / 1024 / 1024).toFixed(2)} MB
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary'
+                    }}
+                  >
                     类型: {file.type}
                   </Typography>
                 </CardContent>
@@ -588,61 +657,115 @@ const ManualCreation = () => {
       case 4:
         return (
           <Box>
-            <Typography variant="h6" sx={{ mb: 4, textAlign: 'center' }}>
-              🎨 手工创作确认
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                mb: 4, 
+                textAlign: 'center',
+                fontWeight: 600,
+                color: isDark ? 'white' : 'text.primary'
+              }}
+            >
+              手工创作确认
             </Typography>
             
-            <Card sx={{ mb: 4 }}>
+            <Card sx={{ 
+              mb: 4,
+              background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
+            }}>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    mb: 2,
+                    fontWeight: 600,
+                    color: isDark ? 'white' : 'text.primary'
+                  }}
+                >
                   {title}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    mb: 2,
+                    color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary'
+                  }}
+                >
                   {description}
                 </Typography>
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="body2">
-                  <strong>类型:</strong> {creationType !== null ? manualCreationTypes[creationType].label : '未选择'} 🎨
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    mb: 1,
+                    color: isDark ? 'rgba(255,255,255,0.8)' : 'text.primary'
+                  }}
+                >
+                  <strong>类型:</strong> {creationType !== null ? manualCreationTypes[creationType].label : '未选择'}
                 </Typography>
-                <Typography variant="body2">
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    mb: 1,
+                    color: isDark ? 'rgba(255,255,255,0.8)' : 'text.primary'
+                  }}
+                >
                   <strong>文件:</strong> {file?.name}
                 </Typography>
-                <Typography variant="body2">
-                  <strong>标签:</strong> {tags.join(', ')}
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    mb: 1,
+                    color: isDark ? 'rgba(255,255,255,0.8)' : 'text.primary'
+                  }}
+                >
+                  <strong>标签:</strong> {tags.join(', ') || '无'}
                 </Typography>
-                <Typography variant="body2">
-                  <strong>工具:</strong> {tools.join(', ')}
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    mb: 1,
+                    color: isDark ? 'rgba(255,255,255,0.8)' : 'text.primary'
+                  }}
+                >
+                  <strong>工具:</strong> {tools.join(', ') || '无'}
                 </Typography>
-                <Typography variant="body2">
-                  <strong>可见性:</strong> {visibility === 'public' ? '🌍 公开' : '🔒 私密'}
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: isDark ? 'rgba(255,255,255,0.8)' : 'text.primary'
+                  }}
+                >
+                  <strong>可见性:</strong> {visibility === 'public' ? '公开' : '私密'}
                 </Typography>
               </CardContent>
             </Card>
 
-            <Alert severity="info" sx={{ mb: 4 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
               <Typography variant="body2">
-                <strong>🎨 手工创作标识:</strong> 此作品将明确标记为"手工创作"，区别于AI生成内容。
+                <strong>手工创作标识:</strong> 此作品将明确标记为"手工创作"，区别于AI生成内容。
               </Typography>
             </Alert>
 
-            <Alert severity="success" sx={{ mb: 4 }}>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                <strong>🔐 双重确权流程:</strong> 您的作品将获得完整的区块链版权保护
+            <Alert severity="success" sx={{ mb: 3 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>双重确权流程:</strong> 您的作品将获得完整的区块链版权保护
               </Typography>
-              <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>
-                📝 <strong>第一次确权:</strong> 记录创作过程到区块链 → 上传文件到IPFS分布式存储
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                <strong>第一次确权:</strong> 记录创作过程到区块链 → 上传文件到IPFS分布式存储
               </Typography>
-              <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>
-                ✅ <strong>第二次确权:</strong> 最终确认与元数据固定 → 生成版权证书NFT
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                <strong>第二次确权:</strong> 最终确认与元数据固定 → 生成版权证书NFT
               </Typography>
-              <Typography variant="caption" sx={{ display: 'block', color: 'success.main' }}>
-                🏆 <strong>完成后:</strong> 获得永久的、不可篡改的区块链版权证明
+              <Typography variant="caption" sx={{ display: 'block' }}>
+                <strong>完成后:</strong> 获得永久的、不可篡改的区块链版权证明
               </Typography>
             </Alert>
 
-            <Alert severity="warning" sx={{ mb: 4 }}>
+            <Alert severity="warning">
               <Typography variant="body2">
-                <strong>⚠️ 重要提示:</strong> 确权过程需要支付少量Gas费用，请确保钱包有足够余额。
+                <strong>重要提示:</strong> 确权过程需要支付少量Gas费用，请确保钱包有足够余额。
                 确权完成后，版权信息将永久存储在区块链上，无法删除或修改。
               </Typography>
             </Alert>
@@ -657,12 +780,29 @@ const ManualCreation = () => {
   // 如果没有连接钱包，显示提示
   if (!connected) {
     return (
-      <PageLayout>
-        <Box sx={{ maxWidth: '900px', mx: 'auto', p: 6, textAlign: 'center' }}>
-          <Typography variant="h4" sx={{ mb: 4 }}>
-            🎨 手工创作
+      <Box sx={{ 
+        minHeight: '100vh',
+        background: isDark ? '#050816' : '#f5f5f5'
+      }}>
+        <Navbar />
+        <Container maxWidth="lg" sx={{ py: 8, textAlign: 'center' }}>
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              mb: 4,
+              fontWeight: 700,
+              color: isDark ? 'white' : 'text.primary'
+            }}
+          >
+            手工创作
           </Typography>
-          <Typography variant="h6" color="text.secondary" sx={{ mb: 6 }}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              mb: 6,
+              color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary'
+            }}
+          >
             请先连接钱包以开始手工创作
           </Typography>
           <Button
@@ -672,20 +812,42 @@ const ManualCreation = () => {
           >
             返回首页连接钱包
           </Button>
-        </Box>
-      </PageLayout>
+        </Container>
+        <Footer />
+      </Box>
     );
   }
 
   return (
-    <PageLayout>
-      <Box sx={{ maxWidth: '900px', mx: 'auto', p: 6 }}>
-        <Typography variant="h4" sx={{ mb: 2, textAlign: 'center' }}>
-          🎨 手工创作
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 6, textAlign: 'center' }}>
-          上传你自己手工制作的作品，享受区块链版权保护
-        </Typography>
+    <Box sx={{ 
+      minHeight: '100vh',
+      background: isDark ? '#050816' : '#f5f5f5'
+    }}>
+      <Navbar />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: 6 }}>
+          <Typography 
+            variant="h3" 
+            sx={{ 
+              mb: 2,
+              fontWeight: 700,
+              color: isDark ? 'white' : 'text.primary'
+            }}
+          >
+            手工创作
+          </Typography>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              mb: 4,
+              color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+              maxWidth: 600,
+              mx: 'auto'
+            }}
+          >
+            上传你自己手工制作的作品，享受区块链版权保护
+          </Typography>
+        </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 4 }}>
@@ -699,25 +861,54 @@ const ManualCreation = () => {
           </Alert>
         )}
 
-        <GlassCard sx={{ p: 6, mb: 6 }}>
-          <Stepper activeStep={activeStep} alternativeLabel>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-        </GlassCard>
+        <Card sx={{ 
+          mb: 4, 
+          background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
+        }}>
+          <CardContent sx={{ p: 4 }}>
+            <Stepper activeStep={activeStep} alternativeLabel>
+              {steps.map((label) => (
+                <Step key={label}>
+                  <StepLabel 
+                    sx={{
+                      '& .MuiStepLabel-label': {
+                        color: isDark ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                        '&.Mui-active': {
+                          color: isDark ? 'white' : 'text.primary'
+                        },
+                        '&.Mui-completed': {
+                          color: isDark ? 'rgba(255,255,255,0.9)' : 'text.primary'
+                        }
+                      }
+                    }}
+                  >
+                    {label}
+                  </StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </CardContent>
+        </Card>
 
-        <GlassCard sx={{ p: 6, mb: 6 }}>
-          {renderStepContent()}
-        </GlassCard>
+        <Card sx={{ 
+          mb: 4,
+          background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
+        }}>
+          <CardContent sx={{ p: 4 }}>
+            {renderStepContent()}
+          </CardContent>
+        </Card>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
           <Button
             disabled={activeStep === 0}
             onClick={handleBack}
             variant="outlined"
+            sx={{
+              minWidth: 120
+            }}
           >
             上一步
           </Button>
@@ -728,6 +919,9 @@ const ManualCreation = () => {
               variant="contained"
               disabled={isUploading}
               startIcon={isUploading ? <CircularProgress size={20} /> : <CheckCircle />}
+              sx={{
+                minWidth: 120
+              }}
             >
               {isUploading ? '提交中...' : '确认提交'}
             </Button>
@@ -735,13 +929,17 @@ const ManualCreation = () => {
             <Button
               onClick={handleNext}
               variant="contained"
+              sx={{
+                minWidth: 120
+              }}
             >
               下一步
             </Button>
           )}
         </Box>
-      </Box>
-    </PageLayout>
+      </Container>
+      <Footer />
+    </Box>
   );
 };
 

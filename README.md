@@ -79,11 +79,18 @@ CreatorChain/
 │   │   ├── services/    # 服务
 │   │   └── utils/       # 工具
 │   └── public/          # 静态资源
-├── contracts/            # 智能合约
-│   ├── CreationRegistry.sol    # 创作注册合约
-│   ├── ProofOfCreation.sol     # 创作证明合约
-│   ├── MultiLayerRights.sol    # 多层版权合约
-│   └── CreatorDAO.sol          # DAO治理合约
+├── contracts/            # 智能合约（主工作区）
+│   ├── contracts/        # 实际编译与部署使用的合约
+│   │   ├── CreatorToken.sol          # 平台代币 CRT
+│   │   ├── CreatorNFT.sol            # 版权 NFT（双重确权）
+│   │   ├── LicenseManager.sol        # 版权授权与分成
+│   │   ├── CreatorDAO.sol            # DAO 治理
+│   │   └── SimpleCreationRegistry.sol# 简化创作登记（与前端演示对接）
+│   └── temp/             # 设计原型合约（非正式部署）
+│       ├── CreationRegistry.sol      # 统一创作注册中心（原型）
+│       ├── ProofOfCreation.sol       # 创作证明合约（原型）
+│       ├── MultiLayerRights.sol      # 多层版权合约（原型）
+│       └── CreatorChainRegistry.sol  # 统一注册协调合约（原型）
 └── docs/                # 文档
 ```
 

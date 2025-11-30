@@ -21,7 +21,8 @@ import {
   Alert,
   Switch,
   FormControlLabel,
-  Tooltip
+  Tooltip,
+  OutlinedInput
 } from '@mui/material';
 import {
   Add,
@@ -53,23 +54,25 @@ const AIModelConfig = () => {
     apiUrl: '',
     defaultModel: '',
     useProxy: false,
-    advancedParams: {}
+    advancedParams: {},
+    capabilities: []
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [testing, setTesting] = useState(false);
 
-  // 支持的AI提供商
+  // 支持的AI提供商（精简版：只保留主流、易理解的几个，避免给用户“全部都已深度集成”的错觉）
   const providers = [
     // 国产大模型 - 更受国内用户欢迎
     {
       id: 'kimi',
       name: 'Kimi (月之暗面)',
       apiUrl: 'https://api.moonshot.cn/v1',
+      // 示例：按照官方文档常见的上下文版本列出，实际请以官网为准
       models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
       imageModels: [],
       audioModels: [],
       capabilities: ['text', 'vision'],
-      description: '支持长文本处理和图像理解，适合复杂任务',
+      description: '面向长文本与图像理解的旗舰模型，模型名称和价格以 Moonshot 官网为准',
       website: 'https://www.kimi.com/',
       isDomestic: true
     },
@@ -77,11 +80,12 @@ const AIModelConfig = () => {
       id: 'deepseek',
       name: 'DeepSeek',
       apiUrl: 'https://api.deepseek.com/v1',
-      models: ['deepseek-chat', 'deepseek-coder', 'deepseek-vl'],
-      imageModels: ['deepseek-vl'],
+      // 示例：chat / reasoner 为官方当前主推方向，具体版本号请查阅 DeepSeek 文档
+      models: ['deepseek-chat', 'deepseek-reasoner'],
+      imageModels: [],
       audioModels: [],
       capabilities: ['text', 'vision', 'code'],
-      description: '代码能力强，支持图像理解，推理效果好',
+      description: '支持高性能对话与推理（含思考模式），模型能力与价格以 DeepSeek 官网为准',
       website: 'https://chat.deepseek.com/',
       isDomestic: true
     },
@@ -93,86 +97,48 @@ const AIModelConfig = () => {
       imageModels: ['qwen-vl-plus'],
       audioModels: [],
       capabilities: ['text', 'vision'],
-      description: '阿里云AI服务，支持文本和图像处理',
+      description: '阿里云 Qwen 系列模型示例，可处理文本与图像，具体型号请参考通义千问文档',
       website: 'https://www.tongyi.com/',
       isDomestic: true
     },
-    // 专业图像生成模型
+    // 智谱 GLM 系列
     {
-      id: 'stability',
-      name: 'Stability AI',
-      apiUrl: 'https://api.stability.ai/v1',
-      models: ['stable-diffusion-xl', 'stable-diffusion-v1-5'],
-      imageModels: ['stable-diffusion-xl', 'stable-diffusion-v1-5'],
-      audioModels: [],
-      capabilities: ['image'],
-      description: '专业图像生成，支持多种艺术风格',
-      website: 'https://stability.ai/',
-      isDomestic: false
-    },
-    {
-      id: 'midjourney',
-      name: 'Midjourney',
-      apiUrl: 'https://api.midjourney.com/v1',
-      models: ['midjourney-v6', 'midjourney-v5'],
-      imageModels: ['midjourney-v6', 'midjourney-v5'],
-      audioModels: [],
-      capabilities: ['image'],
-      description: '高质量艺术图像生成，创意效果出色',
-      website: 'https://www.midjourney.com/',
-      isDomestic: false
-    },
-    // 音频生成模型
-    {
-      id: 'elevenlabs',
-      name: 'ElevenLabs',
-      apiUrl: 'https://api.elevenlabs.io/v1',
-      models: ['eleven-multilingual-v2', 'eleven-turbo-v2'],
+      id: 'glm',
+      name: 'GLM (智谱AI)',
+      apiUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      // 示例：GLM-4.6 / GLM-4.5 等旗舰模型，具体请参考官方模型概览
+      models: ['glm-4.6', 'glm-4.5', 'glm-4-air'],
       imageModels: [],
-      audioModels: ['eleven-multilingual-v2', 'eleven-turbo-v2'],
-      capabilities: ['audio'],
-      description: '高质量语音合成，支持多种语言和音色',
-      website: 'https://elevenlabs.io/',
-      isDomestic: false
+      audioModels: [],
+      capabilities: ['text', 'vision', 'code'],
+      description: '国产通用大模型 GLM 系列示例，支持多模态与代码能力，型号以智谱文档为准',
+      website: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
+      isDomestic: true
     },
-    {
-      id: 'azure-tts',
-      name: 'Azure TTS',
-      apiUrl: 'https://eastus.tts.speech.microsoft.com/cognitiveservices/v1',
-      models: ['zh-CN-XiaoxiaoNeural', 'en-US-AriaNeural'],
-      imageModels: [],
-      audioModels: ['zh-CN-XiaoxiaoNeural', 'en-US-AriaNeural'],
-      capabilities: ['audio'],
-      description: '微软语音合成服务，支持多语言',
-      website: 'https://azure.microsoft.com/',
-      isDomestic: false
-    },
-    // 国际大模型
+    // 国际大模型（示例模型列表，仅供参考，具体可按各平台最新文档调整）
     {
       id: 'openai',
       name: 'OpenAI',
       apiUrl: 'https://api.openai.com/v1',
-      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'dall-e-3'],
-      imageModels: ['dall-e-3', 'dall-e-2'],
-      description: '支持GPT和DALL-E模型',
+      // 示例：按照当前文档常见的通用与高阶模型命名，实际请以 OpenAI Models 文档为准
+      models: ['gpt-5.1', 'gpt-5', 'gpt-4.1', 'gpt-4o'],
+      imageModels: ['gpt-image-1'],
+      capabilities: ['text', 'image', 'audio', 'video'],
+      description: 'OpenAI 通用与多模态模型示例，具体可参考 OpenAI Models 官方文档',
+      website: 'https://platform.openai.com/docs/models',
       isDomestic: false
     },
     {
-      id: 'anthropic',
-      name: 'Anthropic',
-      apiUrl: 'https://api.anthropic.com/v1',
-      models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229'],
-      imageModels: [],
-      description: 'Claude系列模型',
-      isDomestic: false
-    },
-    {
-      id: 'google',
-      name: 'Google',
-      apiUrl: 'https://generativelanguage.googleapis.com/v1',
-      models: ['gemini-pro', 'gemini-pro-vision'],
-      imageModels: ['gemini-pro-vision'],
-      description: 'Gemini系列模型',
+      id: 'gemini',
+      name: 'Google Gemini',
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      // 示例：Gemini 3 / 2.5 / 2.0 系列模型，具体请参考 Google Gemini 模型文档
+      models: ['gemini-3-pro-preview', 'gemini-3-pro-image-preview', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+      imageModels: ['gemini-3-pro-image-preview'],
+      audioModels: [],
+      capabilities: ['text', 'image', 'audio', 'video'],
+      description: 'Google Gemini 多模态模型示例，支持文本、图片、音频和视频等能力，具体型号以官方文档为准',
+      website: 'https://ai.google.dev/gemini-api/docs/models?hl=zh-cn',
       isDomestic: false
     },
     {
@@ -215,7 +181,9 @@ const AIModelConfig = () => {
       apiUrl: '',
       defaultModel: '',
       useProxy: false,
-      advancedParams: {}
+      advancedParams: {},
+      // 默认用途先留空，或在选择提供商时自动带出
+      capabilities: []
     });
     setDialogOpen(true);
   };
@@ -229,7 +197,8 @@ const AIModelConfig = () => {
       apiUrl: model.apiUrl,
       defaultModel: model.defaultModel,
       useProxy: model.useProxy || false,
-      advancedParams: model.advancedParams || {}
+      advancedParams: model.advancedParams || {},
+      capabilities: model.capabilities || []
     });
     setDialogOpen(true);
   };
@@ -247,7 +216,9 @@ const AIModelConfig = () => {
       provider: providerId,
       apiUrl: provider.apiUrl,
       defaultModel: provider.models[0] || '',
-      advancedParams: {}
+      advancedParams: {},
+      // 默认用途从提供商能力预填，用户仍可以在表单中调整
+      capabilities: provider?.capabilities || []
     });
   };
 
@@ -266,6 +237,7 @@ const AIModelConfig = () => {
       defaultModel: formData.defaultModel,
       useProxy: formData.useProxy,
       advancedParams: formData.advancedParams,
+      capabilities: formData.capabilities || [],
       createdAt: editingModel ? editingModel.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -378,7 +350,7 @@ const AIModelConfig = () => {
           <Alert severity="info" sx={{ mb: 3 }}>
             <Typography variant="body2">
               💡 <strong>使用说明</strong>：您需要从AI模型提供商处获取API密钥，然后在平台中配置。
-              所有API调用费用由您与提供商直接结算，平台不收取额外费用。
+              所有API调用费用由您与提供商直接结算，平台不收取额外费用。下方列出的模型名称均为示例推荐，具体可用型号与价格请以各提供商官网文档为准。
             </Typography>
           </Alert>
         </Box>
@@ -579,6 +551,23 @@ const AIModelConfig = () => {
                             size="small"
                             sx={{ mb: 1 }}
                           />
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                            {(model.capabilities || []).map((capability) => (
+                              <Chip
+                                key={capability}
+                                label={
+                                  capability === 'text' ? '文本' :
+                                  capability === 'image' ? '图像' :
+                                  capability === 'audio' ? '音频' :
+                                  capability === 'video' ? '视频' :
+                                  capability === 'vision' ? '视觉' :
+                                  capability === 'code' ? '代码' : capability
+                                }
+                                size="small"
+                                variant="outlined"
+                              />
+                            ))}
+                          </Box>
                         </Box>
                         <Box>
                           <Tooltip title="编辑">
@@ -710,6 +699,51 @@ const AIModelConfig = () => {
                   ))}
                 </Select>
               </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>主要用途 / 能力</InputLabel>
+                <Select
+                  multiple
+                  value={formData.capabilities || []}
+                  input={<OutlinedInput label="主要用途 / 能力" />}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    capabilities: typeof e.target.value === 'string'
+                      ? e.target.value.split(',')
+                      : e.target.value
+                  })}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected || []).map((value) => (
+                        <Chip
+                          key={value}
+                          label={
+                            value === 'text' ? '文本' :
+                            value === 'image' ? '图像' :
+                            value === 'audio' ? '音频' :
+                            value === 'video' ? '视频' :
+                            value === 'vision' ? '视觉' :
+                            value === 'code' ? '代码' : value
+                          }
+                          size="small"
+                        />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  <MenuItem value="text">文本对话 / 写作</MenuItem>
+                  <MenuItem value="image">图像生成</MenuItem>
+                  <MenuItem value="audio">语音合成 / 音频</MenuItem>
+                  <MenuItem value="video">视频生成</MenuItem>
+                  <MenuItem value="vision">图像理解 / 多模态</MenuItem>
+                  <MenuItem value="code">代码助手</MenuItem>
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+                选择该配置主要用于哪些能力。不同创作功能（文字 / 图片 / 语音 / 视频）会根据这里的能力进行筛选。
+              </Typography>
             </Grid>
 
             <Grid item xs={12}>

@@ -44,6 +44,12 @@ ETHEREUM_RPC=http://localhost:8545
 
 # 服务端口
 PORT=8080
+
+# 积分管理配置（安全加固）
+# POINTS_ADMIN_ADDRESSES: 管理员地址列表，用逗号分隔
+# 只有列表中的地址才能调用 /api/v1/points/add 接口添加积分
+# 示例: POINTS_ADMIN_ADDRESSES=0x1234567890123456789012345678901234567890,0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+POINTS_ADMIN_ADDRESSES=
 ```
 
 ### 运行服务

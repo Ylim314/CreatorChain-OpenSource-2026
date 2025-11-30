@@ -652,10 +652,15 @@ func (h *CreationHandler) getCurrentGasPrice() (string, error) {
 	return fmt.Sprintf("%d", gasPrice), nil
 }
 
-// isValidIPFSHash 验证IPFS哈希格式
+// isValidIPFSHash 验证IPFS哈希格式或本地上传路径
 func isValidIPFSHash(hash string) bool {
 	if len(hash) == 0 {
 		return false
+	}
+
+	// 支持本地上传路径 (/uploads/...)
+	if strings.HasPrefix(hash, "/uploads/") {
+		return true
 	}
 
 	// 检查CIDv0格式 (Qm...)

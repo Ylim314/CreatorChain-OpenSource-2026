@@ -154,6 +154,7 @@ func main() {
 	creationRepo := repository.NewCreationRepository(db)
 	txRepo := repository.NewTransactionRepository(db)
 	pointsTxRepo := repository.NewPointsTransactionRepository(db)
+	licenseRepo := repository.NewLicenseRepository(db)
 
 	// 初始化Service层
 	userService := service.NewUserService(userRepo, rdb)
@@ -163,8 +164,8 @@ func main() {
 	// 初始化处理器
 	userHandler := api.NewUserHandler(userService)
 	creationHandler := api.NewCreationHandler(creationService)
-	marketplaceHandler := api.NewMarketplaceHandler(marketplaceService)
-	pointsHandler := api.NewPointsHandler(userRepo)
+	marketplaceHandler := api.NewMarketplaceHandler(marketplaceService, userRepo, licenseRepo, creationRepo, db)
+	pointsHandler := api.NewPointsHandler(userRepo, config.PointsAdminAddresses)
 	pointsTransactionHandler := api.NewPointsTransactionHandler(pointsTxRepo)
 	aiHandler := api.NewAIHandler(aiEngine, ipfsClient, zkpEngine)
 	uploadHandler := api.NewUploadHandler()
@@ -279,11 +280,12 @@ func setupRouter(
 	}
 
 	// 添加安全中间件
+	// 注意：CORS 中间件必须在最前面，确保 OPTIONS 预检请求能正确处理
+	router.Use(api.SecureCORSMiddleware(config.CORSOrigins))
 	router.Use(api.ErrorHandler()) // 统一错误处理
 	router.Use(api.LoggerMiddleware())
 	router.Use(api.RecoveryMiddleware())
 	router.Use(api.SecurityHeadersMiddleware())
-	router.Use(api.SecureCORSMiddleware(config.CORSOrigins))
 	if config.RequestTimeoutSeconds > 0 {
 		timeout := time.Duration(config.RequestTimeoutSeconds) * time.Second
 		router.Use(api.RequestTimeoutMiddleware(timeout))
@@ -347,7 +349,8 @@ func setupRouter(
 				creations.POST("", creationHandler.CreateCreation)
 				creations.PUT("/:id", creationHandler.UpdateCreation)
 				creations.DELETE("/:id", creationHandler.DeleteCreation)
-				creations.POST("/:id/mint", creationHandler.MintNFT)
+				// 阶段2：对NFT铸造操作应用 CriticalOperationMiddleware
+				creations.POST("/:id/mint", api.CriticalOperationMiddleware(), creationHandler.MintNFT)
 				creations.POST("/:id/favorite", userHandler.ToggleFavorite) // 切换收藏状态
 			}
 
@@ -355,8 +358,9 @@ func setupRouter(
 			points := authed.Group("/points")
 			{
 				points.GET("/balance/:address", pointsHandler.GetPointsBalance)
-				points.POST("/transfer", pointsHandler.TransferPoints)
-				points.POST("/add", pointsHandler.AddPoints)
+				// 阶段2：对关键写操作应用 CriticalOperationMiddleware
+				points.POST("/transfer", api.CriticalOperationMiddleware(), pointsHandler.TransferPoints)
+				points.POST("/add", api.CriticalOperationMiddleware(), pointsHandler.AddPoints)
 				points.GET("/history/:address", pointsHandler.GetPointsHistory)
 			}
 
@@ -365,7 +369,9 @@ func setupRouter(
 			{
 				marketplace.GET("/listings", marketplaceHandler.GetListings)
 				marketplace.POST("/list", marketplaceHandler.ListItem)
-				marketplace.POST("/buy", marketplaceHandler.BuyItem)
+				// 阶段2：对购买操作应用 CriticalOperationMiddleware
+				marketplace.POST("/buy", api.CriticalOperationMiddleware(), marketplaceHandler.BuyItem)
+				marketplace.GET("/licenses", marketplaceHandler.GetMyLicenses) // 获取我的授权列表
 			}
 		}
 

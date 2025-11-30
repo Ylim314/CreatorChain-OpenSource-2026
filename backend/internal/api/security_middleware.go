@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -47,6 +48,14 @@ func SecureCORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	allowAll := len(normalized) == 0
 
 	return func(c *gin.Context) {
+		// 记录所有请求（特别是 OPTIONS）以便调试
+		if c.Request.Method == http.MethodOptions {
+			origin := c.Request.Header.Get("Origin")
+			requestHeaders := c.Request.Header.Get("Access-Control-Request-Headers")
+			log.Printf("🔍 CORS Middleware: OPTIONS request detected for path: %s", c.Request.URL.Path)
+			log.Printf("🔍 CORS Middleware: Origin=%s, Request-Headers=%s", origin, requestHeaders)
+		}
+		
 		origin := c.Request.Header.Get("Origin")
 		originAllowed := allowAll
 
@@ -76,12 +85,46 @@ func SecureCORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 			c.Header("Vary", "Origin")
 		}
 
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, User-Address, Signature, Message, Timestamp")
-		c.Header("Access-Control-Expose-Headers", "Content-Length")
+		// CORS headers - 包含所有可能的 header 名称变体
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+		// 注意：浏览器在 CORS 预检请求中会将自定义 header 名称转换为小写
+		// 因此我们必须包含小写版本以确保兼容性
+		// 按照 CORS 规范，header 名称应该是大小写不敏感的，但实际实现可能严格匹配
+		// 🔥 关键：必须包含 message-encoding（小写），这是浏览器实际发送的格式
+		// 同时包含大小写变体以确保兼容性
+		allowedHeaders := "Origin, Content-Type, Accept, Authorization, User-Address, user-address, Signature, signature, Message, message, Message-Encoding, message-encoding, Timestamp, timestamp, X-Requested-With, x-requested-with"
+		c.Header("Access-Control-Allow-Headers", allowedHeaders)
+		c.Header("Access-Control-Expose-Headers", "Content-Length, Content-Type")
 		c.Header("Access-Control-Max-Age", "86400")
 
+		// 处理 OPTIONS 预检请求
 		if c.Request.Method == http.MethodOptions {
+			// 记录预检请求的详细信息以便调试
+			requestHeaders := c.Request.Header.Get("Access-Control-Request-Headers")
+			log.Printf("🔍 CORS Preflight: Origin=%s, Request-Headers=%s", origin, requestHeaders)
+			log.Printf("🔍 CORS Preflight: Allowed-Headers=%s", allowedHeaders)
+			// 确保所有 CORS 响应头都已设置（在 abort 之前）
+			// 注意：之前已经通过 c.Header() 设置了，这里再次确认
+			if allowAll {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			} else if origin != "" {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			}
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+			// 确保使用相同的 allowedHeaders 字符串
+			c.Writer.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
+			c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
+			c.Writer.Header().Set("Access-Control-Max-Age", "86400")
+			// 验证 header 是否真的设置了
+			actualHeaders := c.Writer.Header().Get("Access-Control-Allow-Headers")
+			log.Printf("🔍 CORS Preflight: Actual Response Headers - Access-Control-Allow-Headers=%s", actualHeaders)
+			// 检查是否包含 message-encoding
+			if !strings.Contains(strings.ToLower(actualHeaders), "message-encoding") {
+				log.Printf("⚠️ WARNING: message-encoding not found in allowed headers!")
+			} else {
+				log.Printf("✅ message-encoding found in allowed headers")
+			}
+			log.Printf("🔍 CORS Preflight: Response headers set, returning 204")
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}

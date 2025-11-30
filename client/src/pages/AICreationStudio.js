@@ -47,7 +47,6 @@ const AICreationStudio = () => {
   const [userModels, setUserModels] = useState([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState(false);
 
-
   // 加载用户配置的AI模型
   useEffect(() => {
     if (account) {
@@ -60,13 +59,25 @@ const AICreationStudio = () => {
           setSelectedModel(models[0].id);
         }
       } else {
-        // 如果没有配置的模型，使用默认演示模型
+        // 如果没有配置的模型，仅用于展示 demo 模型，但不计入“已配置”
+        // 避免在用户未真正填写 API 密钥时显示“已配置 X 个AI模型”
         setUserModels(defaultModels);
-        setHasConfiguredModels(true);
-        setSelectedModel(defaultModels[0].id);
+        setHasConfiguredModels(false);
+        if (!selectedModel && defaultModels.length > 0) {
+          setSelectedModel(defaultModels[0].id);
+        }
       }
     }
   }, [account, selectedModel]);
+
+  // 本页面主要用于图像 / 艺术创作，只允许选择具备图像能力的模型
+  const imageCapableModels = (userModels || []).filter((model) => {
+    const caps = model.capabilities || [];
+    // 兼容旧数据：如果没有配置能力，则默认认为可用
+    if (!caps || caps.length === 0) return true;
+    return caps.includes('image') || caps.includes('vision');
+  });
+  const hasImageModels = imageCapableModels.length > 0;
 
   const styles = [
     { value: 'modern', label: '现代风格', color: '#3b82f6' },
@@ -161,9 +172,7 @@ const AICreationStudio = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh',
-      background: isDark 
-        ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
-        : 'linear-gradient(135deg, #fef7ff 0%, #f3e8ff 50%, #e9d5ff 100%)'
+      backgroundColor: isDark ? '#050816' : '#f5f5f5'
     }}>
       <Navbar />
       
@@ -174,16 +183,18 @@ const AICreationStudio = () => {
             variant="h2" 
             sx={{ 
               mb: 3,
-              background: 'linear-gradient(45deg, #8b5cf6, #3b82f6)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
-              fontWeight: 'bold'
+              color: isDark ? '#e5e7eb' : '#111827',
+              fontWeight: 700,
+              letterSpacing: '0.03em'
             }}
           >
-            🎨 AI创作工坊
+            AI 创作工坊
           </Typography>
-          <Typography variant="h5" color="textSecondary" sx={{ maxWidth: 600, mx: 'auto', mb: 3 }}>
+          <Typography 
+            variant="h6" 
+            color={isDark ? 'grey.400' : 'text.secondary'} 
+            sx={{ maxWidth: 640, mx: 'auto', mb: 3 }}
+          >
             释放AI的创造力，打造独一无二的数字艺术作品
           </Typography>
           
@@ -209,10 +220,19 @@ const AICreationStudio = () => {
             </Alert>
           )}
           
-          {hasConfiguredModels && (
+          {hasConfiguredModels && !hasImageModels && (
+            <Alert severity="warning" sx={{ maxWidth: 600, mx: 'auto', mb: 3 }}>
+              <Typography variant="body2">
+                您已配置 {userModels.length} 个AI模型，但当前页面需要支持<strong>图片 / 视觉</strong>能力的模型。
+                请在“AI模型配置”中为模型勾选“图像生成 / 视觉”能力，或新增对应模型后再进行创作。
+              </Typography>
+            </Alert>
+          )}
+
+          {hasImageModels && (
             <Alert severity="success" sx={{ maxWidth: 600, mx: 'auto', mb: 3 }}>
               <Typography variant="body2">
-                已配置 {userModels.length} 个AI模型，可以开始创作了！
+                已配置 {imageCapableModels.length} 个支持图片创作的AI模型，可以开始创作了！
               </Typography>
             </Alert>
           )}
@@ -223,8 +243,12 @@ const AICreationStudio = () => {
           <Grid item xs={12} md={4}>
             <Card 
               sx={{ 
-                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
-                backdropFilter: 'blur(15px)',
+                backgroundColor: isDark ? '#0b1120' : '#ffffff',
+                borderRadius: 2,
+                boxShadow: isDark 
+                  ? '0 10px 30px rgba(15,23,42,0.9)' 
+                  : '0 10px 30px rgba(15,23,42,0.08)',
+                border: `1px solid ${isDark ? '#1e293b' : '#e5e7eb'}`,
                 height: 'fit-content'
               }}
             >
@@ -245,10 +269,7 @@ const AICreationStudio = () => {
                     min={0}
                     max={100}
                     sx={{ 
-                      color: '#8b5cf6',
-                      '& .MuiSlider-thumb': {
-                        background: 'linear-gradient(45deg, #8b5cf6, #3b82f6)'
-                      }
+                      color: isDark ? '#38bdf8' : '#2563eb'
                     }}
                   />
                 </Box>
@@ -264,10 +285,7 @@ const AICreationStudio = () => {
                     min={0}
                     max={100}
                     sx={{ 
-                      color: '#3b82f6',
-                      '& .MuiSlider-thumb': {
-                        background: 'linear-gradient(45deg, #3b82f6, #8b5cf6)'
-                      }
+                      color: isDark ? '#a855f7' : '#7c3aed'
                     }}
                   />
                 </Box>
@@ -279,9 +297,9 @@ const AICreationStudio = () => {
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
                     label="AI模型"
-                    disabled={!hasConfiguredModels}
+                    disabled={!hasImageModels}
                   >
-                    {(userModels || []).map((model) => (
+                    {imageCapableModels.map((model) => (
                       <MenuItem key={model.id} value={model.id}>
                         <Box display="flex" alignItems="center" justifyContent="space-between" width="100%">
                           <Box>
@@ -335,15 +353,18 @@ const AICreationStudio = () => {
                   onClick={handleGenerate}
                   disabled={isGenerating || !hasConfiguredModels || !selectedModel}
                   sx={{ 
-                    background: 'linear-gradient(45deg, #8b5cf6, #3b82f6)',
+                    backgroundColor: isDark ? '#2563eb' : '#1d4ed8',
+                    '&:hover': {
+                      backgroundColor: isDark ? '#1d4ed8' : '#1e40af'
+                    },
                     py: 1.5,
                     fontSize: '1.1rem'
                   }}
                 >
-                  {isGenerating ? '🎨 创作中...' : 
-                   !hasConfiguredModels ? '⚙️ 请先配置模型' :
-                   !selectedModel ? '📝 请选择模型' :
-                   '✨ 开始创作'}
+                  {isGenerating ? '正在创作…' : 
+                   !hasConfiguredModels ? '请先配置模型' :
+                   !selectedModel ? '请选择模型' :
+                   '开始创作'}
                 </Button>
               </CardContent>
             </Card>
@@ -353,8 +374,12 @@ const AICreationStudio = () => {
           <Grid item xs={12} md={8}>
             <Card 
               sx={{ 
-                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
-                backdropFilter: 'blur(15px)',
+                backgroundColor: isDark ? '#020617' : '#ffffff',
+                borderRadius: 2,
+                boxShadow: isDark 
+                  ? '0 10px 30px rgba(15,23,42,0.9)' 
+                  : '0 10px 30px rgba(15,23,42,0.08)',
+                border: `1px solid ${isDark ? '#1e293b' : '#e5e7eb'}`,
                 height: 500
               }}
             >
@@ -372,12 +397,11 @@ const AICreationStudio = () => {
                       alignItems: 'center',
                       justifyContent: 'center',
                       height: '80%',
-                      background: isDark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.05)',
+                      backgroundColor: isDark ? 'rgba(248,113,113,0.1)' : 'rgba(248,113,113,0.06)',
                       borderRadius: 3,
-                      border: '2px dashed #ef4444'
+                      border: '1px solid rgba(248,113,113,0.6)'
                     }}
                   >
-                    <Box sx={{ mb: 2, fontSize: '4rem' }}>❌</Box>
                     <Typography variant="h6" color="error">
                       创作失败
                     </Typography>
@@ -393,13 +417,12 @@ const AICreationStudio = () => {
                       alignItems: 'center',
                       justifyContent: 'center',
                       height: '80%',
-                      background: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.05)',
+                      backgroundColor: isDark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.04)',
                       borderRadius: 3,
-                      border: '2px dashed #10b981',
+                      border: '1px solid rgba(34,197,94,0.6)',
                       mb: 2
                     }}
                   >
-                    <Box sx={{ mb: 2, fontSize: '4rem' }}>✅</Box>
                     <Typography variant="h6" color="success.main">
                       创作成功！
                     </Typography>
@@ -414,12 +437,11 @@ const AICreationStudio = () => {
                       alignItems: 'center',
                       justifyContent: 'center',
                       height: '80%',
-                      background: isDark ? 'rgba(139,92,246,0.1)' : 'rgba(139,92,246,0.05)',
+                      backgroundColor: isDark ? 'rgba(79,70,229,0.12)' : 'rgba(79,70,229,0.06)',
                       borderRadius: 3,
-                      border: '2px dashed #8b5cf6'
+                      border: '1px solid rgba(79,70,229,0.6)'
                     }}
                   >
-                    <Box sx={{ mb: 2, fontSize: '4rem' }}>🎨</Box>
                     <Typography variant="h6" color="primary">
                       AI正在创作中...
                     </Typography>
@@ -432,17 +454,22 @@ const AICreationStudio = () => {
                     <Box 
                       sx={{ 
                         height: 300,
-                        background: `linear-gradient(45deg, ${styles.find(s => s.value === generatedArt.style)?.color}20, ${styles.find(s => s.value === generatedArt.style)?.color}40)`,
-                        borderRadius: 3,
+                        borderRadius: 2,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         mb: 3,
                         position: 'relative',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        backgroundColor: isDark ? '#020617' : '#f9fafb',
+                        border: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`
                       }}
                     >
-                      <Typography variant="h4" color="white" fontWeight="bold">
+                      <Typography 
+                        variant="body1" 
+                        color={isDark ? 'grey.100' : 'text.primary'} 
+                        sx={{ px: 3, textAlign: 'center', whiteSpace: 'pre-wrap' }}
+                      >
                         {generatedArt.preview}
                       </Typography>
                       <Chip 
@@ -477,11 +504,11 @@ const AICreationStudio = () => {
                       alignItems: 'center',
                       justifyContent: 'center',
                       height: '80%',
-                      border: '2px dashed #ccc',
-                      borderRadius: 3
+                      border: `1px dashed ${isDark ? '#4b5563' : '#d1d5db'}`,
+                      borderRadius: 2,
+                      backgroundColor: isDark ? '#020617' : '#f9fafb'
                     }}
                   >
-                    <Box sx={{ mb: 2, fontSize: '4rem' }}>🖼️</Box>
                     <Typography variant="h6" color="textSecondary">
                       设置参数后点击开始创作
                     </Typography>
@@ -508,19 +535,22 @@ const AICreationStudio = () => {
             </Button>
           </Box>
           
-          {hasConfiguredModels ? (
+          {hasImageModels ? (
             <Grid container spacing={3}>
-              {(userModels || []).map((model) => (
+              {imageCapableModels.map((model) => (
                 <Grid item xs={12} sm={6} md={4} key={model.id}>
                   <Card 
                     sx={{ 
-                      background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
-                      backdropFilter: 'blur(10px)',
+                      backgroundColor: isDark ? '#020617' : '#ffffff',
                       textAlign: 'center',
-                      border: selectedModel === model.id ? '2px solid #8b5cf6' : '1px solid transparent',
+                      border: selectedModel === model.id 
+                        ? `1px solid ${isDark ? '#2563eb' : '#1d4ed8'}` 
+                        : `1px solid ${isDark ? '#111827' : '#e5e7eb'}`,
                       '&:hover': { 
                         transform: 'translateY(-5px)',
-                        boxShadow: '0 20px 40px rgba(139,92,246,0.3)'
+                        boxShadow: isDark 
+                          ? '0 18px 40px rgba(15,23,42,0.9)'
+                          : '0 18px 40px rgba(15,23,42,0.1)'
                       },
                       transition: 'all 0.3s ease',
                       cursor: 'pointer'
@@ -534,9 +564,8 @@ const AICreationStudio = () => {
                           height: 60, 
                           mx: 'auto', 
                           mb: 2,
-                          background: selectedModel === model.id 
-                            ? 'linear-gradient(45deg, #8b5cf6, #3b82f6)'
-                            : 'linear-gradient(45deg, #6b7280, #9ca3af)'
+                          backgroundColor: isDark ? '#111827' : '#e5e7eb',
+                          color: isDark ? '#e5e7eb' : '#111827'
                         }}
                       >
                         <AutoAwesome />

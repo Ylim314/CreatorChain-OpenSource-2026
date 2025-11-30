@@ -58,27 +58,28 @@ import Footer from '../components/Footer';
 // 安全的图片URL获取函数
 const getImageUrl = (creation) => {
   try {
-    // 优先使用 image 字段
-    if (creation?.image && typeof creation.image === 'string') {
+    // 检查所有可能的图片字段：image, image_url, fileHash
+    const possibleFields = ['image', 'image_url', 'fileHash', 'ipfsHash'];
+    
+    for (const field of possibleFields) {
+      const value = creation?.[field];
+      if (value && typeof value === 'string' && value.length > 0) {
       // 检查是否为本地上传路径
-      if (creation.image.startsWith('/uploads/')) {
-        return `http://localhost:8080${creation.image}`;
-      } else if (creation.image.startsWith('http://localhost:8080')) {
-        // 已经是完整URL，直接返回
-        return creation.image;
-      } else {
-        // 对于 IPFS 哈希，使用 makeGatewayURL
-        return makeGatewayURL(creation.image);
-      }
-    }
-
-    // 然后检查 fileHash
-    if (creation?.fileHash && typeof creation.fileHash === 'string') {
-      if (creation.fileHash.startsWith('/uploads/')) {
-        return `http://localhost:8080${creation.fileHash}`;
-      } else {
-        // 对于 IPFS 哈希，使用 makeGatewayURL
-        return makeGatewayURL(creation.fileHash);
+        if (value.startsWith('/uploads/')) {
+          return `http://localhost:8080${value}`;
+        }
+        // 已经是完整的后端URL
+        if (value.startsWith('http://localhost:8080')) {
+          return value;
+        }
+        // 完整的HTTP URL（外部图片）
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          return value;
+        }
+        // 检查是否为有效的IPFS哈希
+        if (value.startsWith('Qm') || value.startsWith('bafy')) {
+          return makeGatewayURL(value);
+        }
       }
     }
 
@@ -103,6 +104,7 @@ const MyCreations = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [currentTab, setCurrentTab] = useState(0);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedCreation, setSelectedCreation] = useState(null);
@@ -161,7 +163,7 @@ const MyCreations = () => {
         combinedCreations = localCreations;
       }
 
-      // 3. 添加模拟数据用于演示
+      // 3. 添加模拟数据用于演示（仅在没有任何真实数据时使用）
       const mockCreations = [
       {
         id: 1,
@@ -233,8 +235,12 @@ const MyCreations = () => {
       }
       ];
 
-      // 4. 合并所有创作数据，区块链和本地创作优先显示
-      const finalCreationsRaw = [...combinedCreations, ...mockCreations];
+      // 4. 合并所有创作数据：
+      // - 优先使用真实数据（本地 + 区块链）
+      // - 只有在完全没有真实数据时，才使用模拟数据做空页面演示
+      const finalCreationsRaw = combinedCreations.length > 0
+        ? combinedCreations
+        : mockCreations;
       const seen = new Set();
       const finalCreations = [];
       for (const c of finalCreationsRaw) {
@@ -272,9 +278,14 @@ const MyCreations = () => {
       );
     }
 
-    // 状态过滤
+    // 状态过滤（草稿 / 已发布等）
     if (filterStatus !== 'all') {
       filtered = filtered.filter(creation => creation.status === filterStatus);
+    }
+
+    // 已认证过滤
+    if (verifiedOnly) {
+      filtered = filtered.filter(creation => creation.blockchainVerified);
     }
 
     // 排序
@@ -395,6 +406,33 @@ const MyCreations = () => {
     { label: '已认证', count: creations.filter(c => c.blockchainVerified).length }
   ];
 
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+
+    // 不同标签对应不同过滤规则
+    switch (newValue) {
+      case 0: // 全部
+        setFilterStatus('all');
+        setVerifiedOnly(false);
+        break;
+      case 1: // 已发布
+        setFilterStatus('published');
+        setVerifiedOnly(false);
+        break;
+      case 2: // 草稿
+        setFilterStatus('draft');
+        setVerifiedOnly(false);
+        break;
+      case 3: // 已认证
+        setFilterStatus('all');
+        setVerifiedOnly(true);
+        break;
+      default:
+        setFilterStatus('all');
+        setVerifiedOnly(false);
+    }
+  };
+
   if (!connected) {
     return (
       <Box sx={{ 
@@ -507,7 +545,7 @@ const MyCreations = () => {
         <Box mb={3}>
           <Tabs 
             value={currentTab} 
-            onChange={(e, newValue) => setCurrentTab(newValue)}
+            onChange={handleTabChange}
             sx={{ 
               borderBottom: 1, 
               borderColor: 'divider',
@@ -542,9 +580,21 @@ const MyCreations = () => {
           <Button
             variant="outlined"
             startIcon={<FilterList />}
-            onClick={() => setFilterStatus(filterStatus === 'all' ? 'published' : 'all')}
+            onClick={() => {
+              if (filterStatus === 'all' && !verifiedOnly) {
+                // 切到「已发布」视图
+                setFilterStatus('published');
+                setVerifiedOnly(false);
+                setCurrentTab(1);
+              } else {
+                // 回到「全部」视图
+                setFilterStatus('all');
+                setVerifiedOnly(false);
+                setCurrentTab(0);
+              }
+            }}
           >
-            {filterStatus === 'all' ? '全部状态' : '已发布'}
+            {filterStatus === 'all' && !verifiedOnly ? '全部状态' : '已发布'}
           </Button>
           
           <Button
@@ -579,30 +629,41 @@ const MyCreations = () => {
                 transition: 'all 0.3s ease',
                 '&:hover': { transform: 'translateY(-5px)' }
               }}>
-                <CardMedia
-                  component="img"
-                  height="200"
-                  image={getImageUrl(creation)}
-                  alt={creation.title || '创作作品'}
-                  loading="lazy"
+                <Box
                   sx={{
-                    objectFit: 'cover',
+                    position: 'relative',
                     width: '100%',
+                    pt: '70%', // 固定 10:7 左右的纵横比，所有卡片图片高度一致
                     backgroundColor: '#f5f5f5',
-                    border: '1px solid rgba(0,0,0,0.1)',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      opacity: 0.8,
-                      transform: 'scale(1.02)'
-                    }
+                    borderBottom: '1px solid rgba(0,0,0,0.08)',
+                    overflow: 'hidden',
                   }}
-                  onClick={() => handleImageClick(creation)}
-                  onError={(e) => {
-                    console.warn('Image load failed for creation:', creation.id, 'Original src:', e.target.src);
-                    e.target.src = 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
-                  }}
-                />
+                >
+                  <CardMedia
+                    component="img"
+                    image={getImageUrl(creation)}
+                    alt={creation.title || '创作作品'}
+                    loading="lazy"
+                    sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      cursor: 'pointer',
+                      transition: 'transform 0.3s ease, opacity 0.3s ease',
+                      '&:hover': {
+                        opacity: 0.9,
+                        transform: 'scale(1.03)'
+                      }
+                    }}
+                    onClick={() => handleImageClick(creation)}
+                    onError={(e) => {
+                      console.warn('Image load failed for creation:', creation.id, 'Original src:', e.target.src);
+                      e.target.src = 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
+                    }}
+                  />
+                </Box>
                 <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                     <Typography variant="h6" fontWeight="bold" sx={{ flex: 1, mr: 1 }}>

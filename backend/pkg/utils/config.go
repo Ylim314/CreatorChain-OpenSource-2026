@@ -57,6 +57,9 @@ type Config struct {
 
 	// 请求超时
 	RequestTimeoutSeconds int
+
+	// 积分管理配置
+	PointsAdminAddresses []string
 }
 
 // LoadConfig 加载配置
@@ -108,6 +111,9 @@ func LoadConfig() *Config {
 
 		// 请求超时
 		RequestTimeoutSeconds: getEnvAsInt("REQUEST_TIMEOUT_SECONDS", 30),
+
+		// 积分管理配置
+		PointsAdminAddresses: getEnvAsSlice("POINTS_ADMIN_ADDRESSES", []string{}),
 	}
 
 	// 验证关键配置
@@ -164,7 +170,16 @@ func getEnvAsSlice(key string, defaultValue []string) []string {
 		return defaultValue
 	}
 
-	return strings.Split(valueStr, ",")
+	// 分割并去除每个元素的前后空格
+	parts := strings.Split(valueStr, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // validateConfig 验证关键配置

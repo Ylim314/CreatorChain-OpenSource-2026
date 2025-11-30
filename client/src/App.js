@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Container, CircularProgress, Box } from '@mui/material';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
@@ -23,6 +23,7 @@ import DataAnalytics from './pages/DataAnalytics';
 import GovernanceVoting from './pages/GovernanceVoting';
 import MyFavorites from './pages/MyFavorites';
 import MyCreations from './pages/MyCreations';
+import MyLicenses from './pages/MyLicenses';
 import AIModelConfig from './pages/AIModelConfig';
 import ManualCreation from './pages/ManualCreation';
 import ErrorInfo from './pages/ErrorInfo';
@@ -69,6 +70,15 @@ function App() {
           </>
         } />
         <Route path="/my-creations" element={<MyCreations />} />
+        <Route path="/my-licenses" element={
+          <>
+            <Navbar />
+            <Container maxWidth="lg" sx={{ py: 4, minHeight: 'calc(100vh - 120px)' }}>
+              <MyLicenses />
+            </Container>
+            <Footer />
+          </>
+        } />
         <Route path="/ai-model-config" element={<AIModelConfig />} />
         <Route path="/error-info" element={<ErrorInfo />} />
         <Route path="/create" element={
@@ -89,15 +99,7 @@ function App() {
             <Footer />
           </>
         } />
-        <Route path="/explore" element={
-          <>
-            <Navbar />
-            <Container maxWidth="lg" sx={{ py: 4, minHeight: 'calc(100vh - 120px)' }}>
-              <Explore />
-            </Container>
-            <Footer />
-          </>
-        } />
+        <Route path="/explore" element={<Navigate to="/marketplace" replace />} />
         <Route path="/creation/:id" element={
           <>
             <Navbar />
@@ -119,7 +121,7 @@ function App() {
         <Route path="/marketplace" element={
           <>
             <Navbar />
-            <Container maxWidth="lg" sx={{ py: 4, minHeight: 'calc(100vh - 120px)' }}>
+            <Container maxWidth="xl" sx={{ py: 4, minHeight: 'calc(100vh - 120px)' }}>
               <Marketplace />
             </Container>
             <Footer />

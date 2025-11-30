@@ -74,29 +74,36 @@ func (s *userService) UpdateUser(user *repository.User) error {
 func (s *userService) AuthenticateUser(address, message, signature, timestamp string) (string, error) {
 	// 验证以太坊地址格式
 	if !isValidEthereumAddress(address) {
-		return "", errors.New("invalid ethereum address")
+		return "", fmt.Errorf("invalid ethereum address: %s", address)
 	}
 
 	// 验证签名格式
 	if !isValidSignature(signature) {
-		return "", errors.New("invalid signature format")
+		return "", fmt.Errorf("invalid signature format: length=%d, prefix=%v", len(signature), strings.HasPrefix(signature, "0x"))
 	}
 
 	tsValue, err := security.ValidateTimestamp(timestamp, loginTimestampWindow)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("timestamp validation failed: %w", err)
 	}
 
 	if err := security.ValidateSignedMessage(address, timestamp, message); err != nil {
-		return "", err
+		return "", fmt.Errorf("message validation failed: %w", err)
 	}
 
+	// 检查时间戳是否已被使用
+	// CheckAndStore 现在会在5分钟后自动清除旧记录，允许重新登录
 	if !loginTimestampGuard.CheckAndStore(address, tsValue) {
-		return "", errors.New("timestamp already used")
+		lastTs := loginTimestampGuard.GetLastTimestamp(address)
+		return "", fmt.Errorf("timestamp already used or too old (last: %d, current: %d)", lastTs, tsValue)
 	}
 
 	if err := security.VerifySignature(address, message, signature); err != nil {
-		return "", err
+		// 记录详细的错误信息以便调试
+		log.Printf("Signature verification failed for address %s: %v", address, err)
+		log.Printf("Message: %q (length: %d)", message, len(message))
+		log.Printf("Signature: %s (length: %d)", signature, len(signature))
+		return "", fmt.Errorf("signature verification failed: %w", err)
 	}
 
 	// 生成JWT token

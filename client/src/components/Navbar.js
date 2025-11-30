@@ -29,7 +29,9 @@ import {
   SmartToy,
   Verified,
   Work,
-  Refresh
+  Refresh,
+  PowerSettingsNew,
+  CardMembership
 } from '@mui/icons-material';
 import { useWeb3 } from '../context/Web3ContextFixed';
 import { useThemeMode } from '../context/ThemeModeContext';
@@ -78,8 +80,6 @@ const Navbar = () => {
 
     try {
       await connectWallet();
-      // 立即显示成功提示
-      toast.success('钱包连接成功！');
     } catch (error) {
       console.error('钱包连接失败:', error);
       // 只显示非重复请求的错误
@@ -183,7 +183,7 @@ const Navbar = () => {
                 startIcon={<Home />}
                 sx={{
                   borderRadius: '20px',
-                  px: 3,
+                  px: 2.5,
                   py: 1,
                   transition: 'all 0.3s ease',
                   '&:hover': {
@@ -202,7 +202,7 @@ const Navbar = () => {
                 onClick={handleCreateMenuOpen}
                 sx={{
                   borderRadius: '20px',
-                  px: 3,
+                  px: 2.5,
                   py: 1,
                   transition: 'all 0.3s ease',
                   '&:hover': {
@@ -231,12 +231,6 @@ const Navbar = () => {
                 transformOrigin={{ horizontal: 'center', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'center', vertical: 'bottom' }}
               >
-                <MenuItem component={Link} to="/create" onClick={handleCreateMenuClose}>
-                  <ListItemIcon>
-                    <Create sx={{ color: 'white' }} />
-                  </ListItemIcon>
-                  <ListItemText primary="创作中心" sx={{ color: 'white' }} />
-                </MenuItem>
                 <MenuItem component={Link} to="/ai-creation-studio" onClick={handleCreateMenuClose}>
                   <ListItemIcon>
                     <SmartToy sx={{ color: 'white' }} />
@@ -249,22 +243,22 @@ const Navbar = () => {
                   </ListItemIcon>
                   <ListItemText primary="手工创作" sx={{ color: 'white' }} />
                 </MenuItem>
-                <MenuItem component={Link} to="/my-creations" onClick={handleCreateMenuClose}>
+                <MenuItem component={Link} to="/create" onClick={handleCreateMenuClose}>
                   <ListItemIcon>
-                    <Verified sx={{ color: 'white' }} />
+                    <Create sx={{ color: 'white' }} />
                   </ListItemIcon>
-                  <ListItemText primary="我的作品" sx={{ color: 'white' }} />
+                  <ListItemText primary="登记作品上链" sx={{ color: 'white' }} />
                 </MenuItem>
               </Menu>
 
               <Button 
                 color="inherit" 
                 component={Link} 
-                to="/explore" 
+                to="/marketplace" 
                 startIcon={<Explore />}
                 sx={{
                   borderRadius: '20px',
-                  px: 3,
+                  px: 2.5,
                   py: 1,
                   transition: 'all 0.3s ease',
                   '&:hover': {
@@ -275,25 +269,6 @@ const Navbar = () => {
                 }}
               >
                 探索
-              </Button>
-
-              <Button 
-                color="inherit" 
-                endIcon={<ExpandMore />}
-                onClick={handleMarketMenuOpen}
-                sx={{
-                  borderRadius: '20px',
-                  px: 3,
-                  py: 1,
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(255, 255, 255, 0.2)'
-                  }
-                }}
-              >
-                市场
               </Button>
               <Menu
                 anchorEl={marketAnchorEl}
@@ -312,29 +287,26 @@ const Navbar = () => {
                 transformOrigin={{ horizontal: 'center', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'center', vertical: 'bottom' }}
               >
-                <MenuItem component={Link} to="/marketplace" onClick={handleMarketMenuClose}>
+                <MenuItem component={Link} to="/my-creations" onClick={handleMarketMenuClose}>
                   <ListItemIcon>
-                    <Store sx={{ color: 'white' }} />
+                    <Work sx={{ color: 'white' }} />
                   </ListItemIcon>
-                  <ListItemText primary="作品市场" sx={{ color: 'white' }} />
+                  <ListItemText primary="我的作品" sx={{ color: 'white' }} />
                 </MenuItem>
-                <MenuItem component={Link} to="/smart-contracts" onClick={handleMarketMenuClose}>
+                <MenuItem component={Link} to="/my-favorites" onClick={handleMarketMenuClose}>
                   <ListItemIcon>
-                    <HowToVote sx={{ color: 'white' }} />
+                    <Favorite sx={{ color: 'white' }} />
                   </ListItemIcon>
-                  <ListItemText primary="智能合约" sx={{ color: 'white' }} />
+                  <ListItemText 
+                    primary={`我的收藏${favoritesCount > 0 ? ` (${favoritesCount})` : ''}`} 
+                    sx={{ color: 'white' }} 
+                  />
                 </MenuItem>
-                <MenuItem component={Link} to="/blockchain-verification" onClick={handleMarketMenuClose}>
+                <MenuItem component={Link} to="/my-licenses" onClick={handleMarketMenuClose}>
                   <ListItemIcon>
-                    <Verified sx={{ color: 'white' }} />
+                    <CardMembership sx={{ color: 'white' }} />
                   </ListItemIcon>
-                  <ListItemText primary="区块链验证" sx={{ color: 'white' }} />
-                </MenuItem>
-                <MenuItem component={Link} to="/create" onClick={handleMarketMenuClose}>
-                  <ListItemIcon>
-                    <Create sx={{ color: 'white' }} />
-                  </ListItemIcon>
-                  <ListItemText primary="登记作品上链" sx={{ color: 'white' }} />
+                  <ListItemText primary="我的授权" sx={{ color: 'white' }} />
                 </MenuItem>
               </Menu>
 
@@ -345,7 +317,7 @@ const Navbar = () => {
                 startIcon={<HowToVote />}
                 sx={{
                   borderRadius: '20px',
-                  px: 3,
+                  px: 2.5,
                   py: 1,
                   transition: 'all 0.3s ease',
                   '&:hover': {
@@ -358,92 +330,25 @@ const Navbar = () => {
                 治理
               </Button>
 
-              <Button 
-                color="inherit" 
-                component={Link} 
-                to="/ai-creation-studio" 
-                startIcon={<Create />}
-                sx={{
-                  borderRadius: '20px',
-                  px: 3,
-                  py: 1,
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(255, 255, 255, 0.2)'
-                  }
-                }}
-              >
-                创建
-              </Button>
-
               {connected && (
-                <>
-                  <Button 
-                    color="inherit" 
-                    component={Link} 
-                    to="/my-creations" 
-                    startIcon={<Work />}
-                    sx={{ 
-                      borderRadius: '20px',
-                      px: 3,
-                      py: 1,
-                      transition: 'all 0.3s ease',
-                      '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 12px rgba(255, 255, 255, 0.2)'
-                      }
-                    }}
-                  >
-                    我的作品
-                  </Button>
-                  
-                  <Button 
-                    color="inherit" 
-                    component={Link} 
-                    to="/my-favorites" 
-                    startIcon={<Favorite />}
-                    sx={{ 
-                      position: 'relative',
-                      borderRadius: '20px',
-                      px: 3,
-                      py: 1,
-                      transition: 'all 0.3s ease',
-                      '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 12px rgba(255, 255, 255, 0.2)'
-                      }
-                    }}
-                  >
-                    我的收藏
-                    {favoritesCount > 0 && (
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          top: -8,
-                          right: -8,
-                          background: 'linear-gradient(45deg, #ff6b6b, #ff8e8e)',
-                          color: 'white',
-                          borderRadius: '50%',
-                          width: 20,
-                          height: 20,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                          boxShadow: '0 2px 8px rgba(255, 107, 107, 0.4)',
-                          animation: 'pulse 2s infinite'
-                        }}
-                      >
-                        {favoritesCount}
-                      </Box>
-                    )}
-                  </Button>
-                </>
+                <Button 
+                  color="inherit" 
+                  endIcon={<ExpandMore />}
+                  onClick={handleMarketMenuOpen}
+                  sx={{
+                    borderRadius: '20px',
+                    px: 2.5,
+                    py: 1,
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 4px 12px rgba(255, 255, 255, 0.2)'
+                    }
+                  }}
+                >
+                  我的
+                </Button>
               )}
 
             </Box>
@@ -635,6 +540,23 @@ const Navbar = () => {
                       }}
                     >
                       <ContentCopy fontSize="inherit" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="断开连接">
+                    <IconButton
+                      onClick={disconnectWallet}
+                      size="small"
+                      sx={{
+                        ml: 0.5,
+                        color: '#ff6b6b',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255, 107, 107, 0.15)',
+                          transform: 'scale(1.1)'
+                        }
+                      }}
+                    >
+                      <PowerSettingsNew fontSize="inherit" />
                     </IconButton>
                   </Tooltip>
                 </Box>

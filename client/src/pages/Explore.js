@@ -214,14 +214,34 @@ const Explore = () => {
                 sx={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/creation/${creation.id}`)}
               >
-                <CardMedia
-                  component="img"
-                  height="200"
-                  image={creation.image}
-                  alt={creation.title}
-                  loading="lazy"
-                  sx={{ objectFit: 'cover' }}
-                />
+                {/* 固定纵横比的图片容器 */}
+                <Box
+                  sx={{
+                    position: 'relative',
+                    width: '100%',
+                    paddingTop: '70%', // 10:7 比例
+                    overflow: 'hidden',
+                    backgroundColor: 'rgba(0,0,0,0.1)'
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={creation.image}
+                    alt={creation.title}
+                    loading="lazy"
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                    onError={(e) => {
+                      e.target.src = 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
+                    }}
+                  />
+                </Box>
                 <CardContent sx={{ flexGrow: 1, p: 3 }}>
                   <Typography 
                     variant="h6" 
@@ -286,14 +306,29 @@ const Explore = () => {
                       {creation.price}
                     </Typography>
                     
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack 
+                      direction="row" 
+                      spacing={1} 
+                      alignItems="center"
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ position: 'relative', zIndex: 10 }}
+                    >
                       <IconButton 
                         size="small" 
                         sx={{ 
                           color: isFavorite(creation.id) ? '#ff6b6b' : 'text.secondary',
-                          transition: 'color 0.3s ease'
+                          transition: 'color 0.3s ease',
+                          '&:hover': {
+                            color: isFavorite(creation.id) ? '#ff5252' : '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)'
+                          }
                         }}
-                        onClick={(e) => handleFavoriteClick(e, creation.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleFavoriteClick(e, creation.id);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
                       >
                         {isFavorite(creation.id) ? (
                           <Favorite fontSize="small" />
@@ -315,7 +350,12 @@ const Explore = () => {
                             opacity: 0.1
                           }
                         }}
-                        onClick={(e) => handleViewDetail(e, creation)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleViewDetail(e, creation);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
                         title="查看详情"
                       >
                         <Visibility fontSize="small" />

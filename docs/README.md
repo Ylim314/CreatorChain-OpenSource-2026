@@ -88,13 +88,26 @@ CreatorChain/
 │   │   ├── services/    # 服务
 │   │   └── utils/       # 工具
 │   └── public/          # 静态资源
-├── contracts/            # 智能合约
-│   ├── CreationRegistry.sol    # 创作注册合约
-│   ├── ProofOfCreation.sol     # 创作证明合约
-│   ├── MultiLayerRights.sol    # 多层版权合约
-│   └── CreatorDAO.sol          # DAO治理合约
+├── contracts/            # Hardhat 智能合约工程
+│   ├── contracts/        # Solidity 源码
+│   │   ├── CreatorToken.sol          # 平台激励/治理代币
+│   │   ├── CreatorNFT.sol            # 版权 NFT
+│   │   ├── LicenseManager.sol        # 版权授权与结算
+│   │   ├── CreatorDAO.sol            # DAO 治理
+│   │   └── SimpleCreationRegistry.sol# 双重确权最小实现
+│   ├── scripts/          # 部署脚本（deploy-full.cjs、deploy-simple.js等）
+│   ├── test/             # 合约测试
+│   └── deployed-*.json   # 最新部署记录
 └── docs/                # 文档
 ```
+
+## 🧱 智能合约模块
+
+- **CreatorToken.sol**：ERC-20 激励代币（CRT），内置角色权限、燃烧率、质押与创作奖励池，同时为 DAO 提供投票权。  
+- **CreatorNFT.sol**：基于 ERC-721 的版权凭证，负责铸造与元数据管理，连接前端创作流程。  
+- **LicenseManager.sol**：撮合版权授权/分润订单，使用 CRT 结算并抽取 2.5% 平台手续费，支持多种授权类型与状态管理。  
+- **CreatorDAO.sol**：治理合约，持币用户可发起/投票提案，门槛与投票周期可通过部署脚本配置。  
+- **SimpleCreationRegistry.sol**：面向当前前端的轻量确权流程，提供创作登记、确认、查询与角色管理，便于快速联调。
 
 ## ✨ 核心功能
 
@@ -216,8 +229,13 @@ npm start
 cd contracts
 npm install
 npx hardhat compile
-npx hardhat deploy --network localhost
+# 部署完整代币+NFT+治理体系
+npx hardhat run scripts/deploy-full.cjs --network localhost
+# 或仅部署 SimpleCreationRegistry 供前端联调
+npx hardhat run scripts/deploy-simple.js --network localhost
 ```
+
+部署成功后，新的合约地址会写入 `contracts/deployed-contracts.json`，可直接拷贝到前端配置。
 
 ### 一键启动 (推荐)
 
@@ -291,35 +309,21 @@ npx hardhat deploy --network localhost
 
 ### 🎯 核心文档
 
-- **[技术设计文档](技术设计文档.md)** - 完整的技术架构和实现方案
-- **[区块链技术价值总结](区块链技术价值总结.md)** - 区块链技术应用深度分析
-- **[API接口文档](API接口文档.md)** - 完整的API接口说明
-- **[作品安装说明](作品安装说明.md)** - 详细的安装和运行说明
+- **[项目架构文档](项目架构文档.md)** - 系统分层、模块依赖与部署拓扑
+- **[智能合约设计文档](智能合约设计文档.md)** - 合约模块、权限模型与交互流程
+- **[作品安装说明](作品安装说明.md)** - 从环境准备到一键启动的操作指南
 
-### 📖 技术文档
+### 📖 技术与设计
 
-- **[后端架构设计](后端架构设计.md)** - 后端技术架构详解
-- **[安全中间件说明](安全中间件说明.md)** - 安全机制详细说明
-- **[积分系统说明](积分系统说明.md)** - 积分系统设计说明
-- **[监控系统说明](监控系统说明.md)** - 监控和日志系统说明
+- **[设计思路](设计思路.md)** - 技术选型、双重确权链路与AI协同方案
+- **[设计重难点](设计重难点.md)** - 架构瓶颈、性能、安全与隐私要点
+- **[项目解析与PPT制作指南](项目解析与PPT制作指南.md)** - 讲解要点、演示脚本、PPT 素材
+- **[其他说明](其他说明.md)** - 额外的评审注意事项与补充说明
 
-### 🎨 设计文档
+### 🔧 实战材料
 
-- **[设计思路](设计思路.md)** - 架构设计、技术选型、功能模块设计
-- **[设计重难点](设计重难点.md)** - 技术难点、业务难点、安全难点分析
-- **[作品简介](作品简介.md)** - 项目概述、核心功能、技术特色
-
-### 🔧 部署文档
-
-- **[作品安装说明](作品安装说明.md)** - 详细安装步骤、环境配置、部署指南
-- **[钱包连接说明](钱包连接说明.md)** - 钱包连接和配置说明
-- **[控制台错误说明](控制台错误说明.md)** - 常见错误和解决方案
-
-### 📋 其他文档
-
-- **[开源代码与组件使用情况说明](开源代码与组件使用情况说明.md)** - 技术栈、开源组件、许可证
-- **[作品版权声明](作品版权声明.md)** - 版权声明和使用条款
-- **[其他说明](其他说明.md)** - 其他重要说明
+- **[作品安装说明](作品安装说明.md)** - 详尽的部署、测试和常见问题
+- **README.md（本文）** - 整体概览、快速上手与文档索引
 
 ## 🚀 创新点
 
