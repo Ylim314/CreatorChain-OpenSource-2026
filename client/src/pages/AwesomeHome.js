@@ -133,7 +133,7 @@ const AwesomeHome = () => {
             {/* 炫酷按钮 */}
             <div className="flex gap-6 justify-center flex-wrap mb-16">
               <Button
-                onClick={() => navigate('/ai-chat')}
+                onClick={() => navigate('/create')}
                 className="relative overflow-hidden bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500 hover:from-blue-600 hover:via-purple-700 hover:to-pink-600 text-white px-12 py-4 rounded-full text-lg font-bold shadow-2xl transition-all duration-300 transform hover:scale-105"
                 style={{
                   boxShadow: '0 0 30px rgba(99, 102, 241, 0.5)',
