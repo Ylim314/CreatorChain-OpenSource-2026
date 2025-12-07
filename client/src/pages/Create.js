@@ -25,7 +25,7 @@ const creationMethods = [
     description: '使用AI模型生成创作内容',
     icon: <SmartToy sx={{ fontSize: 60 }} />,
     gradient: 'from-purple-400 via-purple-500 to-purple-600',
-    link: '/ai-creation-studio',
+    link: '/ai-chat',
     badge: 'AI生成',
     features: [
       '多种AI模型支持',

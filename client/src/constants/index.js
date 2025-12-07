@@ -59,7 +59,7 @@ export const POINTS = {
 export const ROUTES = {
   HOME: '/',
   CREATE: '/create',
-  AI_STUDIO: '/ai-creation-studio',
+  AI_STUDIO: '/ai-chat',
   MANUAL_CREATION: '/manual-creation',
   MY_CREATIONS: '/my-creations',
   MY_FAVORITES: '/my-favorites',
