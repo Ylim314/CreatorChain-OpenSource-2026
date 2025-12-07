@@ -1,7 +1,7 @@
 {
   "name": "contracts",
   "version": "1.0.0",
-  "main": "hardhat.config.js",
+  "main": "hardhat.config.cjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
