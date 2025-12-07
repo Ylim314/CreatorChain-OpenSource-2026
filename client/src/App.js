@@ -26,6 +26,7 @@ import MyCreations from './pages/MyCreations';
 import MyLicenses from './pages/MyLicenses';
 import AIModelConfig from './pages/AIModelConfig';
 import ManualCreation from './pages/ManualCreation';
+import AIChat from './pages/AIChat';
 import ErrorInfo from './pages/ErrorInfo';
 import './App.css';
 
@@ -80,6 +81,13 @@ function App() {
           </>
         } />
         <Route path="/ai-model-config" element={<AIModelConfig />} />
+        <Route path="/ai-chat" element={
+          <>
+            <Navbar />
+            <AIChat />
+            <Footer />
+          </>
+        } />
         <Route path="/error-info" element={<ErrorInfo />} />
         <Route path="/create" element={
           <>

@@ -98,9 +98,11 @@ const AIModelConfig = () => {
         'qwen3-max',           // 最强旗舰模型(2025.09)
         'qwen-plus',           // 稳定版均衡模型(支持100万Token上下文)
         'qwen-flash',          // 极速版(速度快/成本低)
-        'qwen-turbo'           // 不推荐(建议用qwen-flash替代)
+        'qwen-turbo',          // 不推荐(建议用qwen-flash替代)
+        'qwen3-vl-plus',       // 视觉理解Plus(仅用于图文理解,不是生成)
+        'qwen3-vl-flash'       // 视觉理解极速版
       ],
-      // 视觉理解模型(图片转文字)
+      // 视觉理解模型(图片转文字) - 已包含在models中
       visionModels: ['qwen3-vl-plus', 'qwen3-vl-flash'],
       // 图像生成模型(文字转图片)
       imageModels: [

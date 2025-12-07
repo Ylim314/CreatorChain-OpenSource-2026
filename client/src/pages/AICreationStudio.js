@@ -111,15 +111,24 @@ const AICreationStudio = () => {
         throw new Error('选择的模型配置不存在');
       }
 
+      // 从localStorage获取认证信息
+      const authData = localStorage.getItem('auth');
+      const auth = authData ? JSON.parse(authData) : null;
+      
+      if (!auth || !auth.signature) {
+        throw new Error('请先连接钱包并登录');
+      }
+
       // 调用真正的AI生成API
       const response = await fetch('/api/v1/ai/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'User-Address': account || '0x742d35Cc6634C0532925a3b8D4C9Db96C4B4d8b6',
-          'Signature': '0x1234567890abcdef...', // 示例签名
-          'Message': 'AI Generation Request',
-          'Timestamp': Date.now().toString()
+          'User-Address': account || auth.address,
+          'Signature': auth.signature,
+          'Message': auth.message,
+          'Message-Encoding': 'base64',
+          'Timestamp': auth.timestamp
         },
         body: JSON.stringify({
           prompt: `Create a ${styles.find(s => s.value === style)?.label} artwork`,
