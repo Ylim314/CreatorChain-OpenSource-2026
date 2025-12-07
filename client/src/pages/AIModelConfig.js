@@ -93,12 +93,47 @@ const AIModelConfig = () => {
       id: 'tongyi',
       name: '通义千问 (阿里)',
       apiUrl: 'https://dashscope.aliyuncs.com/api/v1',
-      models: ['qwen-turbo', 'qwen-plus', 'qwen-max', 'qwen-vl-plus'],
-      imageModels: ['qwen-vl-plus'],
+      // 2025最新版本 - 文本生成模型
+      models: [
+        'qwen3-max',           // 最强旗舰模型(2025.09)
+        'qwen-plus',           // 稳定版均衡模型(支持100万Token上下文)
+        'qwen-flash',          // 极速版(速度快/成本低)
+        'qwen-turbo'           // 不推荐(建议用qwen-flash替代)
+      ],
+      // 视觉理解模型(图片转文字)
+      visionModels: ['qwen3-vl-plus', 'qwen3-vl-flash'],
+      // 图像生成模型(文字转图片)
+      imageModels: [
+        'qwen-image-plus',     // 通义千问文生图旗舰版(0.2元/张)
+        'qwen-image',          // 通义千问文生图标准版
+        'wan2.5-t2i-preview',  // 通义万相2.5预览版
+        'wan2.2-t2i-plus'      // 通义万相2.2专业版
+      ],
+      audioModels: [],
+      capabilities: ['text', 'vision', 'image_generation'],
+      description: '通义千问2025最新模型:qwen3-max旗舰/qwen-plus均衡/qwen-flash极速。图像生成支持qwen-image-plus(中英文渲染)和wan2.5(艺术创作)。视觉理解支持qwen3-vl系列',
+      website: 'https://help.aliyun.com/zh/model-studio/getting-started/models',
+      isDomestic: true
+    },
+    // 豆包(抖音旗下)
+    {
+      id: 'doubao',
+      name: '豆包 (字节跳动)',
+      apiUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      // 豆包主推模型
+      models: [
+        'doubao-pro-32k',           // 专业版32K上下文
+        'doubao-lite-32k',          // 轻量版32K
+        'doubao-character-32k'      // 角色扮演版
+      ],
+      // 豆包视觉模型
+      visionModels: ['doubao-vision-pro'],
+      // 豆包图像生成(如有)
+      imageModels: [],
       audioModels: [],
       capabilities: ['text', 'vision'],
-      description: '阿里云 Qwen 系列模型示例，可处理文本与图像，具体型号请参考通义千问文档',
-      website: 'https://www.tongyi.com/',
+      description: '字节跳动豆包大模型,支持长文本对话和图文理解。Pro版性能强劲,Lite版经济实惠,Character版擅长角色扮演',
+      website: 'https://www.volcengine.com/docs/82379/1302050',
       isDomestic: true
     },
     // 智谱 GLM 系列
