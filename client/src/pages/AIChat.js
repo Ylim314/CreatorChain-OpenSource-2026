@@ -32,54 +32,62 @@ import { useWeb3 } from '../context/Web3ContextFixed';
 import { useThemeMode } from '../context/ThemeModeContext';
 
 // 自定义样式组件
-const GradientPaper = styled(Paper)(({ theme, isDark }) => ({
-  background: isDark 
+const GradientPaper = styled(Paper, {
+  shouldForwardProp: (prop) => prop !== '$isDark',
+})(({ theme, $isDark }) => ({
+  background: $isDark 
     ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
     : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   backdropFilter: 'blur(10px)',
-  border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.2)',
+  border: $isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.2)',
 }));
 
-const MessageBubble = styled(Paper)(({ theme, isUser, isDark }) => ({
+const MessageBubble = styled(Paper, {
+  shouldForwardProp: (prop) => !['$isUser', '$isDark'].includes(prop),
+})(({ theme, $isUser, $isDark }) => ({
   maxWidth: '75%',
   padding: theme.spacing(2),
-  borderRadius: isUser ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-  background: isUser 
-    ? (isDark ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
-    : (isDark ? alpha(theme.palette.background.paper, 0.8) : alpha('#fff', 0.95)),
+  borderRadius: $isUser ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+  background: $isUser 
+    ? ($isDark ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+    : ($isDark ? alpha(theme.palette.background.paper, 0.8) : alpha('#fff', 0.95)),
   backdropFilter: 'blur(10px)',
-  boxShadow: isUser 
+  boxShadow: $isUser 
     ? '0 8px 32px rgba(102, 126, 234, 0.3)'
     : '0 8px 32px rgba(0, 0, 0, 0.1)',
   transition: 'all 0.3s ease',
   '&:hover': {
     transform: 'translateY(-2px)',
-    boxShadow: isUser 
+    boxShadow: $isUser 
       ? '0 12px 40px rgba(102, 126, 234, 0.4)'
       : '0 12px 40px rgba(0, 0, 0, 0.15)',
   }
 }));
 
-const StyledAvatar = styled(Avatar)(({ theme, isUser }) => ({
+const StyledAvatar = styled(Avatar, {
+  shouldForwardProp: (prop) => !['$isUser', '$isDark'].includes(prop),
+})(({ theme, $isUser, $isDark }) => ({
   width: 40,
   height: 40,
-  background: isUser 
+  background: $isUser
     ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
   boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
 }));
 
-const InputContainer = styled(Box)(({ theme, isDark }) => ({
-  background: isDark
+const InputContainer = styled(Box, {
+  shouldForwardProp: (prop) => prop !== '$isDark',
+})(({ theme, $isDark }) => ({
+  background: $isDark
     ? alpha(theme.palette.background.paper, 0.6)
     : alpha('#fff', 0.9),
   backdropFilter: 'blur(20px)',
   borderRadius: '24px',
   padding: theme.spacing(1.5),
-  border: `2px solid ${isDark ? alpha('#667eea', 0.3) : alpha('#667eea', 0.2)}`,
+  border: `2px solid ${$isDark ? alpha('#667eea', 0.3) : alpha('#667eea', 0.2)}`,
   transition: 'all 0.3s ease',
   '&:focus-within': {
-    border: `2px solid ${isDark ? alpha('#667eea', 0.6) : alpha('#667eea', 0.5)}`,
+    border: `2px solid ${$isDark ? alpha('#667eea', 0.6) : alpha('#667eea', 0.5)}`,
     boxShadow: `0 0 0 4px ${alpha('#667eea', 0.1)}`,
   }
 }));
@@ -145,9 +153,22 @@ const AIChat = () => {
       const authData = localStorage.getItem('auth');
       const auth = authData ? JSON.parse(authData) : null;
       
-      if (!auth || !auth.signature) {
+      console.log('🔍 认证数据检查:', { 
+        hasAuthData: !!authData, 
+        hasAuth: !!auth, 
+        hasSignature: !!auth?.signature,
+        hasAddress: !!auth?.address,
+        account 
+      });
+      
+      if (!auth || !auth.signature || !auth.address) {
+        console.error('❌ 认证数据不完整:', auth);
         throw new Error('请先连接钱包并登录');
       }
+      
+      console.log('✅ 认证检查通过:', { address: auth.address, hasSignature: !!auth.signature });
+      
+      console.log('✅ 认证检查通过:', { address: auth.address, hasSignature: !!auth.signature });
 
       const selectedModelConfig = userModels.find(m => m.id === selectedModel);
       if (!selectedModelConfig) {
@@ -244,14 +265,14 @@ const AIChat = () => {
           animation: 'slideIn 0.3s ease-out'
         }}
       >
-        <StyledAvatar isUser={isUser}>
+        <StyledAvatar $isUser={isUser}>
           {isUser ? <PersonIcon /> : <AIIcon />}
         </StyledAvatar>
 
         <MessageBubble
           elevation={0}
-          isUser={isUser}
-          isDark={isDark}
+          $isUser={isUser}
+          $isDark={isDark}
           sx={{
             mx: 1.5,
             bgcolor: isError ? alpha('#f44336', 0.1) : undefined,
@@ -357,7 +378,7 @@ const AIChat = () => {
         : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
     }}>
       {/* 顶部工具栏 */}
-      <GradientPaper elevation={0} isDark={isDark} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
+      <GradientPaper elevation={0} $isDark={isDark} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>选择AI模型</InputLabel>
@@ -418,7 +439,7 @@ const AIChat = () => {
       {/* 消息列表 */}
       <GradientPaper
         elevation={0}
-        isDark={isDark}
+        $isDark={isDark}
         sx={{
           flexGrow: 1,
           overflow: 'auto',
@@ -509,7 +530,7 @@ const AIChat = () => {
       </GradientPaper>
 
       {/* 输入框 */}
-      <InputContainer isDark={isDark}>
+      <InputContainer $isDark={isDark}>
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-end' }}>
           <TextField
             fullWidth
