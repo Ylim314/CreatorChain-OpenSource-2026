@@ -28,7 +28,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useWeb3 } from '../context/Web3ContextFixed';
-import { useThemeMode } from '../context/ThemeContext';
+import { useThemeMode } from '../context/ThemeModeContext';
 
 const AIChat = () => {
   const { account } = useWeb3();
