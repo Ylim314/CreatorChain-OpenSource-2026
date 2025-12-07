@@ -12,16 +12,20 @@ import {
   ListItemIcon,
   Typography,
   Box,
-  CircularProgress
+  CircularProgress,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import {
   AccountBalanceWallet,
-  CheckCircle
+  CheckCircle,
+  Refresh
 } from '@mui/icons-material';
 
-const AccountSelectorDialog = ({ open, onClose, onSelect, accounts = [] }) => {
+const AccountSelectorDialog = ({ open, onClose, onSelect, accounts = [], onRefresh }) => {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // 如果有账户列表，默认选择第一个
@@ -29,6 +33,26 @@ const AccountSelectorDialog = ({ open, onClose, onSelect, accounts = [] }) => {
       setSelectedAccount(accounts[0]);
     }
   }, [accounts, selectedAccount]);
+
+  // 当账户列表更新时，如果当前选中的账户不在新列表中，重置选择
+  useEffect(() => {
+    if (selectedAccount && !accounts.includes(selectedAccount)) {
+      setSelectedAccount(accounts.length > 0 ? accounts[0] : null);
+    }
+  }, [accounts, selectedAccount]);
+
+  const handleRefresh = async () => {
+    if (!onRefresh || refreshing) return;
+    
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (error) {
+      console.error('刷新账户列表失败:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleSelect = async () => {
     if (!selectedAccount) return;
@@ -65,11 +89,34 @@ const AccountSelectorDialog = ({ open, onClose, onSelect, accounts = [] }) => {
       }}
     >
       <DialogTitle sx={{ color: 'white', pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AccountBalanceWallet sx={{ color: '#3b82f6' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            选择钱包账户
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AccountBalanceWallet sx={{ color: '#3b82f6' }} />
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              选择钱包账户
+            </Typography>
+          </Box>
+          {onRefresh && (
+            <Tooltip title="刷新账户列表">
+              <IconButton
+                onClick={handleRefresh}
+                disabled={refreshing}
+                sx={{
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  '&:hover': {
+                    color: '#3b82f6',
+                    bgcolor: 'rgba(59, 130, 246, 0.1)'
+                  }
+                }}
+              >
+                {refreshing ? (
+                  <CircularProgress size={20} sx={{ color: '#3b82f6' }} />
+                ) : (
+                  <Refresh />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
         <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', mt: 1, fontSize: '0.875rem' }}>
           请选择要连接的钱包账户
@@ -84,51 +131,62 @@ const AccountSelectorDialog = ({ open, onClose, onSelect, accounts = [] }) => {
             </Typography>
           </Box>
         ) : (
-          <List sx={{ pt: 0 }}>
-            {accounts.map((account, index) => (
-              <ListItem key={account} disablePadding sx={{ mb: 1 }}>
-                <ListItemButton
-                  selected={selectedAccount === account}
-                  onClick={() => setSelectedAccount(account)}
-                  sx={{
-                    borderRadius: '12px',
-                    border: selectedAccount === account 
-                      ? '2px solid #3b82f6' 
-                      : '1px solid rgba(255, 255, 255, 0.1)',
-                    bgcolor: selectedAccount === account 
-                      ? 'rgba(59, 130, 246, 0.1)' 
-                      : 'rgba(255, 255, 255, 0.05)',
-                    '&:hover': {
+          <>
+            <List sx={{ pt: 0 }}>
+              {accounts.map((account, index) => (
+                <ListItem key={account} disablePadding sx={{ mb: 1 }}>
+                  <ListItemButton
+                    selected={selectedAccount === account}
+                    onClick={() => setSelectedAccount(account)}
+                    sx={{
+                      borderRadius: '12px',
+                      border: selectedAccount === account 
+                        ? '2px solid #3b82f6' 
+                        : '1px solid rgba(255, 255, 255, 0.1)',
                       bgcolor: selectedAccount === account 
-                        ? 'rgba(59, 130, 246, 0.15)' 
-                        : 'rgba(255, 255, 255, 0.1)',
-                    },
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 40 }}>
-                    {selectedAccount === account ? (
-                      <CheckCircle sx={{ color: '#3b82f6' }} />
-                    ) : (
-                      <AccountBalanceWallet sx={{ color: 'rgba(255, 255, 255, 0.5)' }} />
-                    )}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography sx={{ color: 'white', fontWeight: 500, fontFamily: 'monospace' }}>
-                        {formatAddress(account)}
-                      </Typography>
-                    }
-                    secondary={
-                      <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem' }}>
-                        账户 {index + 1}
-                      </Typography>
-                    }
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+                        ? 'rgba(59, 130, 246, 0.1)' 
+                        : 'rgba(255, 255, 255, 0.05)',
+                      '&:hover': {
+                        bgcolor: selectedAccount === account 
+                          ? 'rgba(59, 130, 246, 0.15)' 
+                          : 'rgba(255, 255, 255, 0.1)',
+                      },
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      {selectedAccount === account ? (
+                        <CheckCircle sx={{ color: '#3b82f6' }} />
+                      ) : (
+                        <AccountBalanceWallet sx={{ color: 'rgba(255, 255, 255, 0.5)' }} />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography sx={{ color: 'white', fontWeight: 500, fontFamily: 'monospace' }}>
+                          {formatAddress(account)}
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem' }}>
+                          账户 {index + 1}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+            <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.75rem', lineHeight: 1.6 }}>
+                💡 提示：如果看不到新创建的账户，请：
+                <br />
+                1. 在 MetaMask 中切换到您想要的账户
+                <br />
+                2. 点击右上角的刷新按钮重新获取账户列表
+              </Typography>
+            </Box>
+          </>
         )}
       </DialogContent>
       

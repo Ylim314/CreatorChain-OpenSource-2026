@@ -511,6 +511,14 @@ class ApiService {
     return this.get('/v1/public/creations');
   }
 
+  async getCreationsByCreator(creatorAddress) {
+    if (!creatorAddress) {
+      throw new Error('creatorAddress is required');
+    }
+    const normalizedAddress = creatorAddress.trim();
+    return this.get(`/v1/public/creations?creator=${encodeURIComponent(normalizedAddress)}`);
+  }
+
   async getCreation(id) {
     return this.get(`/v1/public/creations/${id}`);
   }

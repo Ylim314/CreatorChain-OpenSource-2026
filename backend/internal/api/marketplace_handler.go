@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -36,60 +37,132 @@ func NewMarketplaceHandler(marketplaceService service.MarketplaceService, userRe
 }
 
 // ListItem 上架商品
+
 func (h *MarketplaceHandler) ListItem(c *gin.Context) {
-	var req struct {
-		CreationID int64  `json:"creation_id" binding:"required"`
-		Price      string `json:"price" binding:"required"`
-		Currency   string `json:"currency"`
-	}
+    var req struct {
+        CreationID int64  `json:"creation_id" binding:"required"`
+        Price      string `json:"price" binding:"required"`
+        Currency   string `json:"currency"`
+    }
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
 
-	sellerAddress := c.GetString("user_address")
-	if sellerAddress == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
+    sellerAddress := c.GetString("user_address")
+    if sellerAddress == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+        return
+    }
 
-	if req.Currency == "" {
-		req.Currency = "积分"
-	}
+    if req.Currency == "" {
+        req.Currency = "??"
+    }
 
-	// 转换价格字符串为int64
-	price, err := strconv.ParseInt(req.Price, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price format"})
-		return
-	}
+    if req.CreationID <= 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid creation_id"})
+        return
+    }
 
-	listingData := &repository.Listing{
-		TokenID:    req.CreationID, // 使用TokenID而不是CreationID
-		SellerAddr: sellerAddress,  // 使用SellerAddr而不是SellerAddress
-		Price:      price,          // 使用int64类型的价格
-		Status:     "active",
-	}
+    price, err := strconv.ParseInt(req.Price, 10, 64)
+    if err != nil || price <= 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price format"})
+        return
+    }
 
-	// 这里需要先获取Creation对象，暂时简化处理
-	// TODO: 实现完整的ListItem逻辑
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Item listed successfully",
-		"listing": listingData,
-	})
+    creation, err := h.creationRepo.GetByID(uint(req.CreationID))
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Creation not found"})
+        return
+    }
+
+    if creation.TokenID == 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Creation must be minted before listing"})
+        return
+    }
+
+    if strings.ToLower(creation.CreatorAddress) != strings.ToLower(sellerAddress) {
+        c.JSON(http.StatusForbidden, gin.H{"error": "Only creator can list this item"})
+        return
+    }
+
+    var listing repository.Listing
+    tx := h.db.Where("token_id = ?", creation.TokenID).First(&listing)
+    if tx.Error != nil {
+        if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+            listing = repository.Listing{
+                TokenID:    creation.TokenID,
+                SellerAddr: sellerAddress,
+                Price:      price,
+                Status:     "active",
+            }
+            if err := h.db.Create(&listing).Error; err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create listing"})
+                return
+            }
+        } else {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query listing"})
+            return
+        }
+    } else {
+        listing.Price = price
+        listing.Status = "active"
+        listing.SellerAddr = sellerAddress
+        if err := h.db.Save(&listing).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update listing"})
+            return
+        }
+    }
+
+    creation.PriceInPoints = price
+    creation.IsListed = true
+    if err := h.creationRepo.Update(creation); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update creation"})
+        return
+    }
+
+    c.JSON(http.StatusCreated, gin.H{
+        "message": "Item listed successfully",
+        "listing": listing,
+        "creation": creation,
+    })
 }
 
 // GetListings 获取商品列表
+
 func (h *MarketplaceHandler) GetListings(c *gin.Context) {
-	// 暂时返回空列表，后续实现数据库查询
-	c.JSON(http.StatusOK, gin.H{
-		"listings": []interface{}{},
-		"page":     1,
-		"limit":    20,
-		"total":    0,
-		"message":  "Marketplace listings feature coming soon",
-	})
+    page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+    limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+    if limit <= 0 {
+        limit = 20
+    }
+    offset := (page - 1) * limit
+
+    var listings []repository.Listing
+    if err := h.db.Where("status = ?", "active").Order("created_at DESC").Offset(offset).Limit(limit).Find(&listings).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get listings"})
+        return
+    }
+
+    resp := make([]map[string]interface{}, 0, len(listings))
+    for _, l := range listings {
+        item := map[string]interface{}{
+            "listing": l,
+        }
+        creation, err := h.creationRepo.GetByTokenID(l.TokenID)
+        if err == nil {
+            item["creation"] = creation
+        }
+        resp = append(resp, item)
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "listings": resp,
+        "page":     page,
+        "limit":    limit,
+        "total":    len(resp),
+    })
 }
 
 // BuyItem 购买商品/授权

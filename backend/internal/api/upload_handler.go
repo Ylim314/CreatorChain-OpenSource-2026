@@ -132,6 +132,109 @@ func generateRandomString(length int) string {
 	return string(buffer)
 }
 
+// UploadAudio 上传音频文件
+func (h *UploadHandler) UploadAudio(c *gin.Context) {
+	// 获取上传的文件
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "No file uploaded: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证文件类型
+	if !isValidAudioType(file.Header.Get("Content-Type")) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid file type. Only audio files are allowed.",
+		})
+		return
+	}
+
+	// 验证文件大小 (最大 100MB，音频文件通常较大)
+	if file.Size > 100*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "File too large. Maximum size is 100MB.",
+		})
+		return
+	}
+
+	// 生成唯一文件名
+	timestamp := time.Now().Unix()
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("%d_%s%s", timestamp, generateRandomString(8), ext)
+
+	// 确保上传目录存在
+	uploadDir := "./uploads/audio"
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create upload directory: " + err.Error(),
+		})
+		return
+	}
+
+	// 保存文件
+	filePath := filepath.Join(uploadDir, filename)
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save file: " + err.Error(),
+		})
+		return
+	}
+
+	// 生成访问URL
+	audioURL := fmt.Sprintf("/uploads/audio/%s", filename)
+
+	// 生成模拟的IPFS哈希
+	contentHash := generateContentHash(filename)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"filename":     filename,
+			"originalName": file.Filename,
+			"size":         file.Size,
+			"url":          audioURL,
+			"contentHash":  contentHash,
+			"contentType":  file.Header.Get("Content-Type"),
+		},
+	})
+}
+
+// isValidAudioType 验证音频类型
+func isValidAudioType(contentType string) bool {
+	validTypes := []string{
+		"audio/mpeg",      // .mp3
+		"audio/mp3",       // .mp3 (某些浏览器)
+		"audio/wav",       // .wav
+		"audio/wave",      // .wav (某些浏览器)
+		"audio/x-wav",    // .wav (某些浏览器)
+		"audio/ogg",       // .ogg
+		"audio/opus",     // .opus
+		"audio/mp4",       // .m4a (iOS/Android录音)
+		"audio/x-m4a",    // .m4a (某些浏览器)
+		"audio/aac",       // .aac
+		"audio/aacp",      // .aac (某些浏览器)
+		"audio/3gpp",      // .3gp (Android录音)
+		"audio/amr",       // .amr (Android录音)
+		"audio/x-caf",     // .caf (iOS录音)
+		"audio/flac",      // .flac
+		"audio/webm",      // .webm
+	}
+
+	for _, validType := range validTypes {
+		if contentType == validType {
+			return true
+		}
+	}
+	return false
+}
+
 // generateContentHash 生成内容哈希
 func generateContentHash(filename string) string {
 	randomBytes := make([]byte, 32)

@@ -1,15 +1,14 @@
 /**
- * CreatorChain 完整合约部署脚本
+ * CreatorChain 完整合约部署脚本（设计原型 - 不实际使用）
  * 
- * 部署顺序：
- * 1. CreatorToken (CRT) - 平台代币
- * 2. CreatorNFT - 版权NFT
- * 3. LicenseManager - 授权管理
- * 4. CreatorDAO - DAO治理
+ * ⚠️ 重要说明：
+ * - 此脚本为设计原型，不实际部署
+ * - CreatorToken、LicenseManager、CreatorDAO 为设计原型，不部署
+ * - 实际项目仅部署 CreatorNFT（版权确权）
+ * - 本项目采用链下积分系统，不涉及任何虚拟货币
  * 
- * 使用方法：
- * npx hardhat run scripts/deploy-full.js --network localhost
- * npx hardhat run scripts/deploy-full.js --network sepolia
+ * 实际部署请使用：
+ * npx hardhat run scripts/deploy-simple.js --network localhost
  */
 
 const hre = require("hardhat");

@@ -30,16 +30,18 @@ func TestTimestampGuard(t *testing.T) {
 	guard := NewTimestampGuard()
 	address := "0xabc"
 
-	if ok := guard.CheckAndStore(address, 100); !ok {
+	base := time.Now().Unix()
+
+	if ok := guard.CheckAndStore(address, base); !ok {
 		t.Fatalf("first timestamp should pass")
 	}
-	if ok := guard.CheckAndStore(address, 99); ok {
-		t.Fatalf("older timestamp should fail")
+	if ok := guard.CheckAndStore(address, base-1); ok {
+		t.Fatalf("older timestamp within window should fail")
 	}
-	if ok := guard.CheckAndStore(address, 100); ok {
-		t.Fatalf("duplicate timestamp should fail")
+	if ok := guard.CheckAndStore(address, base); ok {
+		t.Fatalf("duplicate timestamp within window should fail")
 	}
-	if ok := guard.CheckAndStore(address, 101); !ok {
+	if ok := guard.CheckAndStore(address, base+1); !ok {
 		t.Fatalf("newer timestamp should pass")
 	}
 }

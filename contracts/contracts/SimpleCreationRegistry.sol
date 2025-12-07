@@ -6,25 +6,33 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title SimpleCreationRegistry
- * @dev Simple creation registry that matches frontend expectations
+ * @dev 简化版的创作登记合约，和当前前端演示流程一一对应：
+ *      - 第一次登记：registerCreation 记录创作过程/文件的哈希等信息
+ *      - 第二次确认：confirmCreation 记录最终版本的哈希并标记为 confirmed
+ *      不直接铸造 NFT，只负责「在链上证明谁在什么时候创作了什么内容」。
  */
 contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
+    // 创作者角色常量（目前主要用于扩展权限控制，测试环境里默认对所有人开放）
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
 
+    /// @dev 链上保存的一条创作记录
     struct Creation {
-        uint256 id;
-        address creator;
-        string title;
-        string description;
-        string ipfsHash;
-        uint256 creationType;
-        bytes32 contentHash;
-        bool confirmed;
-        uint256 timestamp;
+        uint256 id;            // 作品在本合约内的自增 ID（1,2,3,...）
+        address creator;       // 创作者的钱包地址（提交交易的 msg.sender）
+        string title;          // 作品标题（由前端传入）
+        string description;    // 作品描述（由前端传入）
+        string ipfsHash;       // 作品文件或元数据在 IPFS / 本地存储中的哈希或路径
+        uint256 creationType;  // 作品类型：前端用 0/1/2... 区分图像、文本、音频等
+        bytes32 contentHash;   // 把标题+描述+文件哈希等做 keccak256 得到的内容哈希，用于防篡改
+        bool confirmed;        // 是否已经做过最终确认（第二次确权）
+        uint256 timestamp;     // 初次登记时的区块时间，作为时间戳证据
     }
 
+    // 通过作品 ID 查询对应的 Creation 详情
     mapping(uint256 => Creation) public creations;
+    // 通过创作者地址查询他名下所有作品 ID
     mapping(address => uint256[]) public creatorToCreations;
+    // 自增计数器，用来生成新的作品 ID
     uint256 private _creationCounter;
 
     event CreationRegistered(
@@ -41,14 +49,25 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
     );
 
     constructor() {
+        // 部署者默认成为管理员和创作者
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(CREATOR_ROLE, msg.sender);
-        // Grant CREATOR_ROLE to everyone by default for testing
+        // 当前测试版中：CREATOR_ROLE 的管理员是 DEFAULT_ADMIN_ROLE，可按需扩展为白名单制
         _setRoleAdmin(CREATOR_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
     /**
-     * @dev Register a new creation
+     * @dev 注册一条新的创作记录（第一次确权）
+     * @param _title         作品标题
+     * @param _description   作品描述
+     * @param _ipfsHash      作品文件或元数据在 IPFS/本地的哈希（前端 uploadToIPFS 返回）
+     * @param _creationType  作品类型（0=图像、1=文本等，由前端约定）
+     * @param _contentHash   对作品核心信息做 keccak256 得到的内容哈希
+     * @return creationId    新生成的链上作品 ID
+     *
+     * 说明：
+     * - 这个函数不会直接上传文件，只接收哈希/标识符，确保链上存储成本可控；
+     * - 事件 CreationRegistered 会记录核心信息，方便前端/区块浏览器索引。
      */
     function registerCreation(
         string memory _title,
@@ -57,9 +76,11 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         uint256 _creationType,
         bytes32 _contentHash
     ) public returns (uint256) {
+        // 1. 分配新的作品 ID（自增计数器）
         _creationCounter++;
         uint256 creationId = _creationCounter;
 
+        // 2. 在映射中初始化 Creation 结构体
         Creation storage creation = creations[creationId];
         creation.id = creationId;
         creation.creator = msg.sender;
@@ -71,54 +92,67 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         creation.confirmed = false;
         creation.timestamp = block.timestamp;
 
+        // 3. 记录「某个地址名下有哪些作品」
         creatorToCreations[msg.sender].push(creationId);
 
+        // 4. 触发事件，方便前端订阅与索引
         emit CreationRegistered(creationId, msg.sender, _title, _ipfsHash);
 
+        // 5. 将作品 ID 返回给前端，后续用于 confirmCreation / 数据库记录
         return creationId;
     }
 
     /**
-     * @dev Confirm a creation
+     * @dev 确认某条创作记录（第二次确权）
+     * @param _creationId        要确认的作品 ID
+     * @param _finalIpfsHash     最终元数据（通常是 JSON）的 IPFS/本地哈希
+     * @param _finalContentHash  对最终元数据做 keccak256 得到的内容哈希
+     *
+     * 说明：
+     * - 只能由该作品的创作者本人调用；
+     * - 调用后会把 Creation.confirmed 标记为 true，表示已经完成双重确权。
      */
     function confirmCreation(
         uint256 _creationId,
         string memory _finalIpfsHash,
         bytes32 _finalContentHash
     ) public {
+        // 安全检查：只有最初登记该作品的地址可以做最终确认
         require(creations[_creationId].creator == msg.sender, "Not the creator");
 
+        // 更新作品的最终哈希信息，并标记为已确认
         Creation storage creation = creations[_creationId];
         creation.ipfsHash = _finalIpfsHash;
         creation.contentHash = _finalContentHash;
         creation.confirmed = true;
 
+        // 发出事件，记录确认动作（包含最终 IPFS 哈希）
         emit CreationConfirmed(_creationId, msg.sender, _finalIpfsHash);
     }
 
     /**
-     * @dev Get creation details
+     * @dev 根据作品 ID 获取链上存储的完整 Creation 信息
      */
     function getCreation(uint256 _creationId) public view returns (Creation memory) {
         return creations[_creationId];
     }
 
     /**
-     * @dev Get all creations by a creator
+     * @dev 根据创作者地址获取其所有作品 ID 列表
      */
     function getCreationsByCreator(address _creator) public view returns (uint256[] memory) {
         return creatorToCreations[_creator];
     }
 
     /**
-     * @dev Grant creator role to an address
+     * @dev 授予某个地址 CREATOR_ROLE（预留扩展用，当前演示环境未严格限制）
      */
     function grantCreatorRole(address account) public {
         _grantRole(CREATOR_ROLE, account);
     }
 
     /**
-     * @dev Check if account has creator role
+     * @dev 查询某个地址是否拥有 CREATOR_ROLE
      */
     function hasCreatorRole(address account) public view returns (bool) {
         return hasRole(CREATOR_ROLE, account);

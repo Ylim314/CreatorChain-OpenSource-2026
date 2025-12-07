@@ -36,13 +36,15 @@ type Creation struct {
 	CreatorAddress    string `json:"creator_address" gorm:"size:42;not null"`
 	Title             string `json:"title" gorm:"size:200;not null"`
 	Description       string `json:"description"`
+	Visibility        string `json:"visibility" gorm:"size:10;default:'private'"` // public/private
 	ContentHash       string `json:"content_hash" gorm:"size:64;not null"`
 	MetadataHash      string `json:"metadata_hash" gorm:"size:64;not null"`
-	ImageURL          string `json:"image_url" gorm:"size:500"`           // 图片访问URL
+	ImageURL          string `json:"image_url" gorm:"size:500"` // 图片访问URL
 	AIModel           string `json:"ai_model" gorm:"size:100"`
 	PromptText        string `json:"prompt_text"`
 	ContributionScore int    `json:"contribution_score"`
-	PriceInPoints     int64  `json:"price_in_points"` // 使用积分定价
+	PriceInPoints     int64  `json:"price_in_points"`                    // 使用积分定价
+	LicenseDuration   int    `json:"license_duration" gorm:"default:12"` // 授权时长（月），默认12个月
 	IsListed          bool   `json:"is_listed" gorm:"default:false"`
 	// 双重确权流程相关字段
 	CreationProcessHash string         `json:"creation_process_hash" gorm:"size:64"`    // 创作过程哈希

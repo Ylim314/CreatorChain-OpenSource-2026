@@ -96,8 +96,16 @@ func main() {
 		&repository.BlockchainEvent{},
 	)
 	if err != nil {
-		log.Printf("Database migration warning: %v", err)
+		// 忽略"约束不存在"的警告（GORM尝试删除不存在的约束时会产生）
+		errStr := err.Error()
+		if !strings.Contains(errStr, "Can't DROP") && !strings.Contains(errStr, "check that column/key exists") {
+			log.Printf("⚠️ Database migration warning: %v", err)
+		}
 		// 不退出，继续运行
+	}
+
+	if err := ensureCreationVisibilityColumn(db); err != nil {
+		log.Printf("⚠️ Failed to ensure creation visibility column: %v", err)
 	}
 	log.Println("✅ Database migration completed")
 
@@ -391,10 +399,35 @@ func setupRouter(
 		upload := apiV1.Group("/upload")
 		{
 			upload.POST("/image", uploadHandler.UploadImage)
+			upload.POST("/audio", uploadHandler.UploadAudio)
 		}
 	}
 
 	return router
+}
+
+func ensureCreationVisibilityColumn(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("database instance is nil")
+	}
+
+	migrator := db.Migrator()
+	if migrator.HasColumn(&repository.Creation{}, "visibility") {
+		return nil
+	}
+
+	log.Println("⚙️ Adding visibility column to creations table...")
+	if err := migrator.AddColumn(&repository.Creation{}, "visibility"); err != nil {
+		return fmt.Errorf("add column visibility failed: %w", err)
+	}
+
+	if err := db.Model(&repository.Creation{}).
+		Where("visibility = '' OR visibility IS NULL").
+		Update("visibility", "public").Error; err != nil {
+		return fmt.Errorf("initialize visibility values failed: %w", err)
+	}
+
+	return nil
 }
 
 // initDatabaseWithRetry 使用重试机制初始化数据库连接

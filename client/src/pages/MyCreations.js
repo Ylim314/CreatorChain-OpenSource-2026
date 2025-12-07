@@ -24,7 +24,10 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Tooltip
+  Tooltip,
+  Alert,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import {
   Edit,
@@ -45,13 +48,16 @@ import {
   Favorite,
   Share,
   AttachMoney,
-  Category
+  Category,
+  MusicNote,
+  GraphicEq
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { makeGatewayURL } from '../utils/ipfs';
 import { useThemeMode } from '../context/ThemeModeContext';
 import { useWeb3 } from '../context/Web3ContextFixed';
 import blockchainService from '../services/blockchainService';
+import apiService from '../services/apiService';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -91,11 +97,175 @@ const getImageUrl = (creation) => {
   }
 };
 
+// 获取音频/视频文件URL的函数
+const getMediaUrl = (creation) => {
+  try {
+    // 优先检查专门的URL字段（音频上传返回的url字段）
+    const urlFields = ['url', 'fileUrl', 'content_url', 'audioUrl', 'videoUrl'];
+    for (const field of urlFields) {
+      const value = creation?.[field];
+      if (value && typeof value === 'string' && value.length > 0) {
+        // 检查是否为本地上传路径
+        if (value.startsWith('/uploads/')) {
+          return `http://localhost:8080${value}`;
+        }
+        // 已经是完整的后端URL
+        if (value.startsWith('http://localhost:8080')) {
+          return value;
+        }
+        // 完整的HTTP URL
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          return value;
+        }
+      }
+    }
+    
+    // 检查image和image_url字段（可能存储的是音频文件路径）
+    const imageFields = ['image', 'image_url'];
+    for (const field of imageFields) {
+      const value = creation?.[field];
+      if (value && typeof value === 'string' && value.length > 0) {
+        // 如果是本地上传路径（特别是音频路径）
+        if (value.startsWith('/uploads/audio/') || value.startsWith('/uploads/')) {
+          return `http://localhost:8080${value}`;
+        }
+        // 已经是完整的后端URL
+        if (value.startsWith('http://localhost:8080')) {
+          return value;
+        }
+        // 完整的HTTP URL
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          return value;
+        }
+      }
+    }
+    
+    // 然后检查哈希字段（IPFS哈希）
+    const hashFields = ['contentHash', 'fileHash', 'ipfsHash', 'content_hash'];
+    for (const field of hashFields) {
+      const value = creation?.[field];
+      if (value && typeof value === 'string' && value.length > 0) {
+        // 检查是否为有效的IPFS哈希
+        if (value.startsWith('Qm') || value.startsWith('bafy')) {
+          return makeGatewayURL(value);
+        }
+        // 如果是本地上传路径格式的哈希，也尝试作为URL
+        if (value.startsWith('/uploads/')) {
+          return `http://localhost:8080${value}`;
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting media URL for creation:', creation, error);
+    return null;
+  }
+};
+
+// 检查是否为音频类型
+const isAudioType = (creation) => {
+  if (!creation) return false;
+  
+  // 检查 category 字段（主要字段，如"音频"）
+  const category = String(creation.category || '').toLowerCase();
+  if (category === 'audio' || category === '音频') {
+    return true;
+  }
+  
+  // 检查 creationType 字段
+  const creationType = String(creation.creationType || '').toLowerCase();
+  if (creationType === 'audio' || creationType === '音频') {
+    return true;
+  }
+  
+  // 检查 creationTypeLabel 字段
+  const creationTypeLabel = String(creation.creationTypeLabel || '').toLowerCase();
+  if (creationTypeLabel === 'audio' || creationTypeLabel === '音频') {
+    return true;
+  }
+  
+  // 检查文件扩展名（作为后备方案）
+  const fileHash = creation.fileHash || creation.image || creation.image_url || '';
+  if (fileHash && (fileHash.includes('.m4a') || fileHash.includes('.mp3') || fileHash.includes('.wav') || fileHash.includes('.ogg'))) {
+    return true;
+  }
+  
+  return false;
+};
+
+// 根据作品类型渲染内容
+const renderCreationContent = (creation) => {
+  const creationType = String(creation?.creationType || creation?.category || '').toLowerCase();
+  const mediaUrl = getMediaUrl(creation);
+  
+  if (isAudioType(creation)) {
+    if (mediaUrl) {
+      return (
+        <Box sx={{ mb: 3, textAlign: 'center' }}>
+          <audio 
+            controls 
+            src={mediaUrl} 
+            style={{ width: '100%', maxWidth: '600px' }}
+          >
+            您的浏览器不支持音频播放。
+          </audio>
+        </Box>
+      );
+    } else {
+      return (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          音频文件URL不可用，无法播放。
+        </Alert>
+      );
+    }
+  }
+  
+  if (creationType === 'video' || creationType === '视频') {
+    if (mediaUrl) {
+      return (
+        <Box sx={{ mb: 3, textAlign: 'center' }}>
+          <video 
+            controls 
+            src={mediaUrl} 
+            style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px' }}
+          >
+            您的浏览器不支持视频播放。
+          </video>
+        </Box>
+      );
+    } else {
+      return (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          视频文件URL不可用，无法播放。
+        </Alert>
+      );
+    }
+  }
+  
+  // 默认显示图片（image 或其他类型）
+  return (
+    <Box sx={{ mb: 3, textAlign: 'center' }}>
+      <img
+        src={getImageUrl(creation)}
+        alt={creation?.title || '创作作品'}
+        style={{
+          maxWidth: '100%',
+          maxHeight: '300px',
+          objectFit: 'cover',
+          borderRadius: '8px',
+          border: '2px solid rgba(255, 255, 255, 0.1)'
+        }}
+      />
+    </Box>
+  );
+};
+
 const MyCreations = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { mode } = useThemeMode();
-  const { connected, account } = useWeb3();
+  const { connected, account, refreshAuthForCriticalOperation } = useWeb3();
   const isDark = mode === 'dark';
   
   const [creations, setCreations] = useState([]);
@@ -114,11 +284,31 @@ const MyCreations = () => {
     title: '',
     description: '',
     price: '',
+    licenseDuration: '12', // 授权时长（月），默认12个月
     category: '',
     visibility: 'public'
   });
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedCreationDetail, setSelectedCreationDetail] = useState(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [menuCreation, setMenuCreation] = useState(null);
+  const persistLocalCreations = (nextCreations) => {
+    const localOnly = nextCreations.filter(creation => creation.localCreation);
+    localStorage.setItem('userCreations', JSON.stringify(localOnly));
+  };
+
+  const syncCreationVisibility = async (creationId, visibilityValue) => {
+    const numericId = Number(creationId);
+    if (!numericId || Number.isNaN(numericId) || numericId <= 0) {
+      return;
+    }
+    try {
+      await apiService.updateCreation(numericId, { visibility: visibilityValue });
+    } catch (error) {
+      console.error('同步作品可见性失败:', error);
+      toast.error('同步作品可见性失败，请稍后重试');
+    }
+  };
 
   // 加载创作数据（区块链 + 本地存储 + 模拟数据）
   useEffect(() => {
@@ -129,14 +319,38 @@ const MyCreations = () => {
       const localCreations = JSON.parse(localStorage.getItem('userCreations') || '[]');
       console.log('本地创作数据:', localCreations);
 
-      // 2. 如果连接了钱包，尝试从区块链加载
+      // 2. 如果连接了钱包，尝试从后端 + 区块链加载
       if (connected && account) {
         try {
+          // 后端我的作品
+          const backendResp = await apiService.getCreationsByCreator(account);
+          const backendCreations = Array.isArray(backendResp?.creations) ? backendResp.creations : [];
+          const formattedBackend = backendCreations.map((creation) => ({
+            id: creation.id || creation.ID,
+            token_id: creation.token_id || creation.TokenID,
+            title: creation.title || creation.Title || '未命名作品',
+            description: creation.description || creation.Description || '',
+            image: creation.image_url || creation.ImageURL || creation.image || '',
+            fileHash: creation.content_hash || creation.ContentHash,
+            creationType: creation.creation_type || creation.CreationType || 'manual',
+            status: creation.visibility === 'public' ? 'published' : 'draft',
+            visibility: creation.visibility || 'public',
+            createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString().split('T')[0],
+            views: 0,
+            likes: 0,
+            downloads: 0,
+            blockchainVerified: !!creation.token_id || !!creation.TokenID,
+            hash: creation.content_hash || creation.ContentHash,
+            price: creation.price_in_points || creation.PriceInPoints || 0,
+            price_in_points: creation.price_in_points || creation.PriceInPoints || 0,
+            license_duration: creation.license_duration || creation.LicenseDuration || 12,
+            is_listed: creation.is_listed || creation.IsListed,
+          }));
+
+          // 区块链数据（保持原有逻辑）
           await blockchainService.initialize();
           const blockchainCreations = await blockchainService.getUserCreations(account);
           console.log('区块链创作数据:', blockchainCreations);
-
-          // 将区块链创作转换为本地格式
           const formattedBlockchainCreations = blockchainCreations.map(creation => ({
             id: creation.id,
             title: creation.title || '区块链创作',
@@ -154,9 +368,9 @@ const MyCreations = () => {
             hash: creation.contentHash
           }));
 
-          combinedCreations = [...formattedBlockchainCreations, ...localCreations];
+          combinedCreations = [...formattedBackend, ...formattedBlockchainCreations, ...localCreations];
         } catch (error) {
-          console.warn('从区块链加载数据失败:', error);
+          console.warn('从后端或区块链加载数据失败:', error);
           combinedCreations = localCreations;
         }
       } else {
@@ -175,7 +389,7 @@ const MyCreations = () => {
         creationType: 'ai', // AI创作
         status: 'published',
         visibility: 'public',
-        createdAt: '2024-01-15',
+        createdAt: '2025-11-15',
         views: 1250,
         likes: 89,
         downloads: 23,
@@ -192,7 +406,7 @@ const MyCreations = () => {
         creationType: 'manual', // 手工创作
         status: 'draft',
         visibility: 'private',
-        createdAt: '2024-01-12',
+        createdAt: '2025-11-12',
         views: 0,
         likes: 0,
         downloads: 0,
@@ -209,7 +423,7 @@ const MyCreations = () => {
         creationType: 'manual', // 手工创作
         status: 'published',
         visibility: 'public',
-        createdAt: '2024-01-10',
+        createdAt: '2025-11-10',
         views: 2100,
         likes: 156,
         downloads: 45,
@@ -226,7 +440,7 @@ const MyCreations = () => {
         creationType: 'ai', // AI创作
         status: 'published',
         visibility: 'public',
-        createdAt: '2024-01-08',
+        createdAt: '2025-11-08',
         views: 890,
         likes: 67,
         downloads: 12,
@@ -307,7 +521,7 @@ const MyCreations = () => {
     });
 
     setFilteredCreations(filtered);
-  }, [creations, searchTerm, filterStatus, sortBy]);
+  }, [creations, searchTerm, filterStatus, sortBy, verifiedOnly]);
 
   const handleImageClick = (creation) => {
     const imageUrl = getImageUrl(creation);
@@ -320,27 +534,58 @@ const MyCreations = () => {
     setEditForm({
       title: creation.title || '',
       description: creation.description || '',
-      price: (creation.price || 0).toString(),
+      price: (creation.price || creation.price_in_points || 0).toString(),
+      licenseDuration: (creation.license_duration || creation.licenseDuration || 12).toString(),
       category: creation.category || creation.creationTypeLabel || '其他',
       visibility: creation.visibility || 'public'
     });
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editForm.title.trim()) {
       toast.error('请输入作品标题');
       return;
     }
 
+    const priceInPoints = parseInt(editForm.price) || 0;
+    const licenseDuration = parseInt(editForm.licenseDuration) || 12;
+
+    // 更新本地状态
     setCreations(creations.map(creation => 
       creation.id === selectedCreation.id 
-        ? { ...creation, ...editForm, price: parseInt(editForm.price) }
+        ? { 
+            ...creation, 
+            ...editForm, 
+            price: priceInPoints,
+            price_in_points: priceInPoints,
+            license_duration: licenseDuration,
+            licenseDuration: licenseDuration
+          }
         : creation
     ));
+
+    // 如果作品有后端ID，尝试更新后端
+    if (selectedCreation.id && typeof selectedCreation.id === 'number') {
+      try {
+        const updateData = {
+          title: editForm.title,
+          description: editForm.description,
+          visibility: editForm.visibility || 'private',
+          price_in_points: priceInPoints,
+          license_duration: licenseDuration
+        };
+        await apiService.updateCreation(selectedCreation.id, updateData);
+        toast.success('作品信息更新成功！');
+      } catch (error) {
+        console.error('更新后端失败:', error);
+        toast.success('本地信息已更新！');
+      }
+    } else {
+      toast.success('作品信息更新成功！');
+    }
     
     setEditDialogOpen(false);
-    toast.success('作品信息更新成功！');
   };
 
   const handleDelete = (creation) => {
@@ -353,28 +598,168 @@ const MyCreations = () => {
     setDetailDialogOpen(true);
   };
 
-  const confirmDelete = () => {
-    setCreations(creations.filter(creation => creation.id !== selectedCreation.id));
-    setDeleteDialogOpen(false);
-    toast.success('作品删除成功！');
+  // MoreVert菜单处理
+  const handleMenuOpen = (event, creation) => {
+    event.stopPropagation();
+    setMenuAnchorEl(event.currentTarget);
+    setMenuCreation(creation);
   };
 
-  const handlePublish = (creation) => {
-    setCreations(creations.map(c => 
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+    setMenuCreation(null);
+  };
+
+  const handleMenuAction = (action) => {
+    if (!menuCreation) return;
+    
+    handleMenuClose();
+    
+    switch (action) {
+      case 'view':
+        handleViewDetail(menuCreation);
+        break;
+      case 'edit':
+        handleEdit(menuCreation);
+        break;
+      case 'publish':
+        if (menuCreation.status === 'published') {
+          handleUnpublish(menuCreation);
+        } else {
+          handlePublish(menuCreation);
+        }
+        break;
+      case 'delete':
+        handleDelete(menuCreation);
+        break;
+      case 'share':
+        if (navigator.share) {
+          navigator.share({
+            title: menuCreation.title,
+            text: menuCreation.description,
+            url: window.location.href
+          }).catch(() => {
+            // 如果分享失败，复制链接到剪贴板
+            navigator.clipboard.writeText(window.location.href);
+            toast.success('链接已复制到剪贴板');
+          });
+        } else {
+          navigator.clipboard.writeText(window.location.href);
+          toast.success('链接已复制到剪贴板');
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const confirmDelete = async () => {
+    // 如果作品已上链，尝试调用后端API删除（但区块链记录无法删除）
+    if (selectedCreation?.id && typeof selectedCreation.id === 'number') {
+      try {
+        await apiService.deleteCreation(selectedCreation.id);
+        toast.success('作品已从平台删除！注意：区块链上的记录无法删除。');
+      } catch (error) {
+        console.error('删除后端记录失败:', error);
+        toast.success('作品已从本地列表移除！注意：区块链上的记录无法删除。');
+      }
+    }
+    
+    // 从本地状态中移除
+    setCreations(creations.filter(creation => creation.id !== selectedCreation.id));
+    setDeleteDialogOpen(false);
+  };
+
+  const handlePublish = async (creation) => {
+    const updated = creations.map(c => 
       c.id === creation.id 
         ? { ...c, status: 'published', visibility: 'public' }
         : c
-    ));
+    );
+    setCreations(updated);
+    persistLocalCreations(updated);
     toast.success('作品发布成功！');
+    await syncCreationVisibility(creation.id, 'public');
   };
 
-  const handleUnpublish = (creation) => {
-    setCreations(creations.map(c => 
+  const handleUnpublish = async (creation) => {
+    const updated = creations.map(c => 
       c.id === creation.id 
         ? { ...c, status: 'draft', visibility: 'private' }
         : c
-    ));
+    );
+    setCreations(updated);
+    persistLocalCreations(updated);
     toast.success('作品已下架！');
+    await syncCreationVisibility(creation.id, 'private');
+  };
+
+  const handleMintNFT = async (creation) => {
+    if (!creation?.id) {
+      toast.error('缺少作品ID，无法铸造');
+      return;
+    }
+    try {
+      if (typeof refreshAuthForCriticalOperation === 'function') {
+        const ok = await refreshAuthForCriticalOperation();
+        if (!ok) {
+          return;
+        }
+      }
+      const resp = await apiService.mintNFT(creation.id);
+      const tokenId = resp?.token_id || resp?.tokenId || creation.token_id || creation.TokenID || creation.id;
+      const updated = creations.map((c) =>
+        c.id === creation.id ? { ...c, token_id: tokenId, TokenID: tokenId, blockchainVerified: true } : c
+      );
+      setCreations(updated);
+      toast.success(`铸造成功，TokenID: ${tokenId}`);
+    } catch (error) {
+      console.error('铸造NFT失败:', error);
+      toast.error(error?.message || '铸造失败，请稍后重试');
+    }
+  };
+
+  const handleListItem = async (creation) => {
+    if (!creation?.id) {
+      toast.error('缺少作品ID，无法上架');
+      return;
+    }
+    if (!creation.token_id && !creation.TokenID) {
+      toast.error('请先铸造NFT再上架');
+      return;
+    }
+    const priceInput = window.prompt('请输入上架价格（积分）', String(creation.price || creation.price_in_points || 0));
+    if (!priceInput) return;
+    const price = parseInt(priceInput, 10);
+    if (Number.isNaN(price) || price <= 0) {
+      toast.error('价格必须为正整数');
+      return;
+    }
+    try {
+      if (typeof refreshAuthForCriticalOperation === 'function') {
+        const ok = await refreshAuthForCriticalOperation();
+        if (!ok) {
+          return;
+        }
+      }
+      await apiService.createListing({ creation_id: creation.id, price: String(price) });
+      const updated = creations.map((c) =>
+        c.id === creation.id
+          ? {
+              ...c,
+              price,
+              price_in_points: price,
+              is_listed: true,
+              status: 'published',
+            }
+          : c
+      );
+      setCreations(updated);
+      toast.success('上架成功');
+    } catch (error) {
+      console.error('上架失败:', error);
+      toast.error(error?.message || '上架失败，请稍后重试');
+    }
   };
 
   const getStatusColor = (status) => {
@@ -633,43 +1018,146 @@ const MyCreations = () => {
                   sx={{
                     position: 'relative',
                     width: '100%',
-                    pt: '70%', // 固定 10:7 左右的纵横比，所有卡片图片高度一致
-                    backgroundColor: '#f5f5f5',
+                    pt: '70%', // 统一使用70%的高度比例，保持所有卡片一致
+                    backgroundColor: isAudioType(creation) 
+                      ? (isDark 
+                          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 50%, rgba(59, 130, 246, 0.2) 100%)'
+                          : 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 50%, rgba(59, 130, 246, 0.1) 100%)')
+                      : '#f5f5f5',
                     borderBottom: '1px solid rgba(0,0,0,0.08)',
                     overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
-                  <CardMedia
-                    component="img"
-                    image={getImageUrl(creation)}
-                    alt={creation.title || '创作作品'}
-                    loading="lazy"
-                    sx={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      cursor: 'pointer',
-                      transition: 'transform 0.3s ease, opacity 0.3s ease',
-                      '&:hover': {
-                        opacity: 0.9,
-                        transform: 'scale(1.03)'
-                      }
-                    }}
-                    onClick={() => handleImageClick(creation)}
-                    onError={(e) => {
-                      console.warn('Image load failed for creation:', creation.id, 'Original src:', e.target.src);
-                      e.target.src = 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
-                    }}
-                  />
+                  {isAudioType(creation) ? (
+                    <Box 
+                      sx={{ 
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        p: 3,
+                        gap: 2
+                      }}
+                    >
+                      {/* 音频图标装饰 */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        mb: 1
+                      }}>
+                        <MusicNote 
+                          sx={{ 
+                            fontSize: 48, 
+                            color: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(99, 102, 241, 0.3)',
+                            animation: 'pulse 2s ease-in-out infinite',
+                            '@keyframes pulse': {
+                              '0%, 100%': { opacity: 0.3, transform: 'scale(1)' },
+                              '50%': { opacity: 0.6, transform: 'scale(1.1)' }
+                            }
+                          }} 
+                        />
+                      </Box>
+                      
+                      {/* 音频播放器 */}
+                      {(() => {
+                        const audioUrl = getMediaUrl(creation);
+                        console.log('音频作品:', creation.title, '音频URL:', audioUrl, '作品数据:', creation);
+                        if (audioUrl) {
+                          return (
+                            <Box sx={{ width: '100%', maxWidth: '90%' }}>
+                              <audio 
+                                controls 
+                                src={audioUrl} 
+                                style={{ 
+                                  width: '100%',
+                                  borderRadius: '8px',
+                                  backgroundColor: isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.8)',
+                                  backdropFilter: 'blur(10px)'
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onError={(e) => {
+                                  console.error('音频加载失败:', audioUrl, e);
+                                  toast.error('音频文件加载失败，请检查文件是否存在');
+                                }}
+                              >
+                                您的浏览器不支持音频播放。
+                              </audio>
+                            </Box>
+                          );
+                        } else {
+                          return (
+                            <Box sx={{ textAlign: 'center', p: 2 }}>
+                              <Alert severity="warning" sx={{ mb: 1 }}>
+                                音频文件URL不可用
+                              </Alert>
+                              <Typography variant="caption" color="textSecondary">
+                                文件路径: {creation.fileHash || creation.image || creation.image_url || '未知'}
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                      })()}
+                      
+                      {/* 波形装饰图标 */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: 0.5,
+                        mt: 1,
+                        opacity: 0.4
+                      }}>
+                        <GraphicEq sx={{ fontSize: 20 }} />
+                        <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                          音频作品
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <CardMedia
+                      component="img"
+                      image={getImageUrl(creation)}
+                      alt={creation.title || '创作作品'}
+                      loading="lazy"
+                      sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        cursor: 'pointer',
+                        transition: 'transform 0.3s ease, opacity 0.3s ease',
+                        '&:hover': {
+                          opacity: 0.9,
+                          transform: 'scale(1.03)'
+                        }
+                      }}
+                      onClick={() => handleImageClick(creation)}
+                      onError={(e) => {
+                        console.warn('Image load failed for creation:', creation.id, 'Original src:', e.target.src);
+                        e.target.src = 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
+                      }}
+                    />
+                  )}
                 </Box>
                 <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                     <Typography variant="h6" fontWeight="bold" sx={{ flex: 1, mr: 1 }}>
                       {creation.title}
                     </Typography>
-                    <IconButton size="small">
+                    <IconButton 
+                      size="small"
+                      onClick={(e) => handleMenuOpen(e, creation)}
+                      aria-label="更多操作"
+                    >
                       <MoreVert />
                     </IconButton>
                   </Box>
@@ -717,9 +1205,16 @@ const MyCreations = () => {
                   </Box>
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" color="primary" fontWeight="bold">
-                      {creation.price || '免费'} {creation.price ? '积分' : ''}
-                    </Typography>
+                    <Box>
+                      <Typography variant="h6" color="primary" fontWeight="bold">
+                        {creation.price || creation.price_in_points || '免费'} {creation.price || creation.price_in_points ? '积分' : ''}
+                      </Typography>
+                      {(creation.license_duration || creation.licenseDuration) && (
+                        <Typography variant="caption" color="textSecondary">
+                          授权时长: {creation.license_duration || creation.licenseDuration} 个月
+                        </Typography>
+                      )}
+                    </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       {getVisibilityIcon(creation.visibility)}
                       <Typography variant="caption" color="textSecondary">
@@ -772,6 +1267,21 @@ const MyCreations = () => {
                         发布
                       </Button>
                     )}
+                    <Button
+                      size="small"
+                      color="primary"
+                      onClick={() => handleMintNFT(creation)}
+                    >
+                      铸造NFT
+                    </Button>
+                    <Button
+                      size="small"
+                      color="secondary"
+                      onClick={() => handleListItem(creation)}
+                      disabled={!(creation.token_id || creation.TokenID)}
+                    >
+                      上架
+                    </Button>
                     <Button 
                       size="small" 
                       color="error"
@@ -828,11 +1338,23 @@ const MyCreations = () => {
           />
           <TextField
             fullWidth
-            label="价格 (积分)"
+            label="售价 (积分)"
             type="number"
             value={editForm.price}
             onChange={(e) => setEditForm({...editForm, price: e.target.value})}
             margin="normal"
+            helperText="设置作品售价，0表示免费"
+            inputProps={{ min: 0 }}
+          />
+          <TextField
+            fullWidth
+            label="授权时长 (月)"
+            type="number"
+            value={editForm.licenseDuration}
+            onChange={(e) => setEditForm({...editForm, licenseDuration: e.target.value})}
+            margin="normal"
+            helperText="购买授权后的使用时长，建议1-120个月"
+            inputProps={{ min: 1, max: 120 }}
           />
           <TextField
             fullWidth
@@ -852,15 +1374,76 @@ const MyCreations = () => {
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>确认删除</DialogTitle>
         <DialogContent>
-          <Typography>
-            确定要删除作品 "{selectedCreation?.title}" 吗？此操作无法撤销。
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            确定要删除作品 "{selectedCreation?.title}" 吗？
           </Typography>
+          {selectedCreation?.blockchainVerified && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>重要提示：</strong>此作品已上链确权，删除操作只会从您的作品列表中移除，<strong>无法删除区块链上的永久记录</strong>。区块链上的版权信息将永久保存，无法修改或删除。
+              </Typography>
+            </Alert>
+          )}
+          {!selectedCreation?.blockchainVerified && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                此操作将从您的作品列表中移除该作品。如果作品已上链确权，区块链上的记录将永久保留。
+              </Typography>
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>取消</Button>
-          <Button onClick={confirmDelete} color="error" variant="contained">删除</Button>
+          <Button onClick={confirmDelete} color="error" variant="contained">确认删除</Button>
         </DialogActions>
       </Dialog>
+
+      {/* 更多操作菜单 */}
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem onClick={() => handleMenuAction('view')}>
+          <ListItemIcon>
+            <Visibility fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>查看详情</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuAction('edit')}>
+          <ListItemIcon>
+            <Edit fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>编辑</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuAction('publish')}>
+          <ListItemIcon>
+            {menuCreation?.status === 'published' ? <Lock fontSize="small" /> : <Public fontSize="small" />}
+          </ListItemIcon>
+          <ListItemText>{menuCreation?.status === 'published' ? '下架' : '发布'}</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuAction('share')}>
+          <ListItemIcon>
+            <Share fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>分享</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={() => handleMenuAction('delete')} sx={{ color: 'error.main' }}>
+          <ListItemIcon>
+            <Delete fontSize="small" sx={{ color: 'error.main' }} />
+          </ListItemIcon>
+          <ListItemText>删除</ListItemText>
+        </MenuItem>
+      </Menu>
 
       {/* 图片预览对话框 */}
       <Dialog 
@@ -946,20 +1529,8 @@ const MyCreations = () => {
         <DialogContent>
           {selectedCreationDetail && (
             <Box>
-              {/* 作品图片 */}
-              <Box sx={{ mb: 3, textAlign: 'center' }}>
-                <img
-                  src={getImageUrl(selectedCreationDetail)}
-                  alt={selectedCreationDetail.title}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '300px',
-                    objectFit: 'cover',
-                    borderRadius: '8px',
-                    border: '2px solid rgba(255, 255, 255, 0.1)'
-                  }}
-                />
-              </Box>
+              {/* 作品内容（根据类型显示图片、音频或视频） */}
+              {renderCreationContent(selectedCreationDetail)}
 
               {/* 基本信息 */}
               <List>
@@ -1065,15 +1636,28 @@ const MyCreations = () => {
                 技术信息
               </Typography>
               <List dense>
-                {selectedCreationDetail.fileHash && (
+                {/* 链上登记信息（如果有的话） */}
+                {typeof selectedCreationDetail.id !== 'undefined' && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <Verified color="primary" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="链上创作ID"
+                      secondary={String(selectedCreationDetail.id)}
+                    />
+                  </ListItem>
+                )}
+
+                {selectedCreationDetail.registrationTx && (
                   <ListItem>
                     <ListItemIcon>
                       <Link color="primary" />
                     </ListItemIcon>
                     <ListItemText
-                      primary="文件哈希"
+                      primary="注册交易哈希"
                       secondary={
-                        <Tooltip title="点击复制">
+                        <Tooltip title="点击复制交易哈希">
                           <Box
                             component="span"
                             sx={{
@@ -1084,11 +1668,11 @@ const MyCreations = () => {
                               '&:hover': { textDecoration: 'underline' }
                             }}
                             onClick={() => {
-                              navigator.clipboard.writeText(selectedCreationDetail.fileHash);
-                              toast.success('文件哈希已复制到剪贴板');
+                              navigator.clipboard.writeText(selectedCreationDetail.registrationTx);
+                              toast.success('注册交易哈希已复制到剪贴板');
                             }}
                           >
-                            {selectedCreationDetail.fileHash}
+                            {selectedCreationDetail.registrationTx}
                           </Box>
                         </Tooltip>
                       }
@@ -1096,7 +1680,82 @@ const MyCreations = () => {
                   </ListItem>
                 )}
 
-                {selectedCreationDetail.hash && (
+                {selectedCreationDetail.confirmationTx && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <Link color="primary" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="确认交易哈希"
+                      secondary={
+                        <Tooltip title="点击复制交易哈希">
+                          <Box
+                            component="span"
+                            sx={{
+                              fontFamily: 'monospace',
+                              cursor: 'pointer',
+                              color: 'primary.main',
+                              fontSize: '0.875rem',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedCreationDetail.confirmationTx);
+                              toast.success('确认交易哈希已复制到剪贴板');
+                            }}
+                          >
+                            {selectedCreationDetail.confirmationTx}
+                          </Box>
+                        </Tooltip>
+                      }
+                    />
+                  </ListItem>
+                )}
+
+                {/* 根据值的形态智能区分“哈希”和“文件路径” */}
+                {selectedCreationDetail.fileHash && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <Link color="primary" />
+                    </ListItemIcon>
+                    {(() => {
+                      const value = selectedCreationDetail.fileHash;
+                      const isPath = typeof value === 'string' && value.startsWith('/uploads/');
+                      const label = isPath ? '文件路径' : '文件哈希';
+                      const tooltip = isPath ? '点击复制完整文件路径' : '点击复制文件哈希';
+                      const toastMsg = isPath ? '文件路径已复制到剪贴板' : '文件哈希已复制到剪贴板';
+                      return (
+                        <ListItemText
+                          primary={label}
+                          secondary={
+                            <Tooltip title={tooltip}>
+                              <Box
+                                component="span"
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  cursor: 'pointer',
+                                  color: 'primary.main',
+                                  fontSize: '0.875rem',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(value);
+                                  toast.success(toastMsg);
+                                }}
+                              >
+                                {value}
+                              </Box>
+                            </Tooltip>
+                          }
+                        />
+                      );
+                    })()}
+                  </ListItem>
+                )}
+
+                {/* 只有当内容哈希看起来像真正的哈希时才展示 */}
+                {selectedCreationDetail.hash &&
+                  typeof selectedCreationDetail.hash === 'string' &&
+                  !selectedCreationDetail.hash.startsWith('/uploads/') && (
                   <ListItem>
                     <ListItemIcon>
                       <Verified color="primary" />

@@ -6,7 +6,7 @@
 - 购买后本地积分更新机制
 
 ## 审计日期
-2024年（当前日期）
+2025年12月（当前日期）
 
 ---
 
@@ -395,4 +395,111 @@ err = h.db.Transaction(func(tx *gorm.DB) error {
 - 幂等性保护
 
 **建议**：已修复的问题都是最关键的安全漏洞。剩余问题可以逐步优化。
+
+---
+
+## 🔒 已实施的安全措施
+
+### 签名与重放防护
+- **统一消息格式**：`backend/internal/security/signature.go` 与 `backend/internal/security/timestamp.go` 提供统一的 `CreatorChain Authentication` 消息格式
+- **时间戳校验**：要求所有认证请求携带时间戳，阻断 5 分钟窗口内的重放攻击
+- **重放守卫**：`backend/internal/api/middleware.go`、`backend/internal/service/user_service.go`、`backend/internal/api/user_handler.go` 均实施重放检测
+
+### 登录链路一致性
+- **前端统一认证**：`client/src/context/Web3ContextFixed.js` 和 `client/src/services/apiService.js` 在登录与后续请求中附带 `User-Address/Signature/Message/Timestamp` 头部
+- **后端中间件复用**：所有需要认证的接口通过 `AuthMiddleware` 统一验证
+
+### 零知识证明校验
+- **配置化有效期**：`backend/internal/zkp/zkp_engine.go` 允许配置化的有效期
+- **合理拒绝策略**：只拒绝明显异常的时间戳，避免历史证明自动失效
+
+### 防护中间件
+- **CORS 白名单**：`backend/internal/api/security_middleware.go` 基于 `CORS_ORIGINS` 环境变量返回 CORS 头
+- **请求超时**：`RequestTimeoutMiddleware` 通过 `REQUEST_TIMEOUT_SECONDS` 自动开启全局超时，超时请求返回 504
+- **配置入口**：`backend/cmd/api/main.go` 统一管理安全配置
+
+### 回归测试
+- **单元测试覆盖**：新增 `backend/internal/security/*_test.go` 与 `backend/internal/service/user_service_test.go`
+- **测试范围**：涵盖消息格式、时间戳解析、重放守卫与 JWT 发放
+- **持续集成**：`go test ./...` 可对关键路径进行自动回归
+
+### 文档整理
+- **规范记录**：`AGENTS.md` 同步记录签名规范、CORS/超时配置以及新的环境变量
+- **便于交接**：完整的安全文档便于团队成员理解和维护
+
+---
+
+## 📋 下一步安全优化建议
+
+### 1. 前端 UI 提示
+- 在连接钱包时提示"需要签名登录消息"
+- 降低用户误解签名风险
+- 提供更友好的安全说明
+
+### 2. 覆盖率扩展
+- 对 `AuthMiddleware`、AI 上传路由、Marketplace 等补充集成或端到端测试
+- 确保未来改动有失败信号
+- 建立完整的测试基线
+
+### 3. 部署基线检查
+- 在 `docs/` 中新增 `deploy_security_checklist.md`
+- 列出必须配置的环境变量：
+  - 数据库连接 (`DATABASE_URL`)
+  - Redis 配置
+  - CORS 白名单 (`CORS_ORIGINS`)
+  - 请求超时 (`REQUEST_TIMEOUT_SECONDS`)
+  - 链上私钥和 RPC 地址
+  - JWT 密钥
+  - AI 服务密钥
+
+### 4. 敏感配置轮换
+- 上线前替换 Hardhat 示例私钥
+- 在 CI/CD 中加入 secret 扫描
+- 添加预提交检查，避免明文密钥混入仓库
+- 使用环境变量或密钥管理服务存储敏感信息
+
+### 5. 监控与告警
+- 添加异常登录检测（如频繁失败的签名验证）
+- 监控积分转移异常（如大额转移、频繁转移）
+- 记录所有关键操作的审计日志
+
+---
+
+## 🔑 环境变量配置清单
+
+### 必需配置
+```bash
+# 数据库
+DATABASE_URL=root:password@tcp(localhost:3306)/creatorchain_final?charset=utf8mb4&parseTime=True&loc=Local
+
+# 服务配置
+PORT=8080
+GIN_MODE=release
+
+# 安全配置
+JWT_SECRET=your-secure-jwt-secret-here
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+REQUEST_TIMEOUT_SECONDS=30
+
+# 区块链配置
+ETHEREUM_RPC=https://your-rpc-url
+PRIVATE_KEY=your-private-key-here
+
+# 存储配置
+PINATA_API_KEY=your-pinata-api-key
+PINATA_SECRET_API_KEY=your-pinata-secret-key
+
+# AI 服务配置
+ZHIPU_API_KEY=your-zhipu-api-key
+```
+
+### 可选配置
+```bash
+# Redis（用于重放攻击防护）
+REDIS_URL=redis://localhost:6379
+
+# 监控配置
+ENABLE_METRICS=true
+METRICS_PORT=9090
+```
 

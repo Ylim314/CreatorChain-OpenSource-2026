@@ -10,20 +10,57 @@ const IPFS_GATEWAY = process.env.REACT_APP_IPFS_GATEWAY || 'https://gateway.pina
 const ALLOWED_FILE_TYPES = {
   image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
   video: ['video/mp4', 'video/webm', 'video/ogg'],
-  audio: ['audio/mp3', 'audio/wav', 'audio/ogg'],
+  audio: [
+    'audio/mpeg',      // .mp3
+    'audio/mp3',       // .mp3 (某些浏览器)
+    'audio/wav',       // .wav
+    'audio/wave',      // .wav (某些浏览器)
+    'audio/x-wav',     // .wav (某些浏览器)
+    'audio/ogg',       // .ogg
+    'audio/opus',      // .opus
+    'audio/mp4',       // .m4a (iOS/Android录音)
+    'audio/x-m4a',     // .m4a (某些浏览器)
+    'audio/aac',       // .aac
+    'audio/aacp',      // .aac (某些浏览器)
+    'audio/3gpp',      // .3gp (Android录音)
+    'audio/amr',       // .amr (Android录音)
+    'audio/x-caf',     // .caf (iOS录音)
+    'audio/flac',      // .flac
+    'audio/webm'       // .webm
+  ],
   document: ['application/pdf', 'text/plain', 'application/json']
 };
 
 // 最大文件大小 (50MB)
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
+// 根据文件类型获取上传端点
+const getUploadEndpoint = (fileType) => {
+  if (!fileType) {
+    return '/upload/image'; // 默认使用图片端点
+  }
+  
+  if (fileType.startsWith('audio/')) {
+    return '/upload/audio';
+  } else if (fileType.startsWith('image/')) {
+    return '/upload/image';
+  } else {
+    // 对于其他类型，默认使用图片端点（可以根据需要扩展）
+    return '/upload/image';
+  }
+};
+
 // 使用本地服务上传文件
 const uploadToLocalService = (file, metadata, onProgress) => {
   const formData = new FormData();
   formData.append('file', file);
 
+  // 根据文件类型选择正确的上传端点
+  const endpoint = getUploadEndpoint(file.type);
+  const uploadUrl = `http://localhost:8080/api/v1${endpoint}`;
+
   // 上传到本地服务
-  return fetch('http://localhost:8080/api/v1/upload/image', {
+  return fetch(uploadUrl, {
     method: 'POST',
     body: formData
   }).then(response => {

@@ -77,6 +77,7 @@ func (r *creationRepository) Delete(id uint) error {
 func (r *creationRepository) List(offset, limit int) ([]*Creation, error) {
 	var creations []*Creation
 	err := r.db.Preload("Creator").
+		Where("visibility = ?", "public").
 		Offset(offset).Limit(limit).
 		Order("created_at DESC").
 		Find(&creations).Error
@@ -88,6 +89,7 @@ func (r *creationRepository) GetMarketListings(offset, limit int) ([]*Creation, 
 	var creations []*Creation
 	err := r.db.Preload("Creator").
 		Where("is_listed = ?", true).
+		Where("visibility = ?", "public").
 		Offset(offset).Limit(limit).
 		Order("created_at DESC").
 		Find(&creations).Error

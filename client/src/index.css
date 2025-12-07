@@ -16,27 +16,27 @@ code {
     monospace;
 }
 
-/* 自定义滚动条 */
+/* 自定义滚动条（更克制的灰色风格） */
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f5f5f5;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+  background: #9ca3af;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(45deg, #2563eb, #7c3aed);
+  background: #6b7280;
 }
 
-/* 渐变文字 */
+/* 渐变文字（改为柔和的中性色调，而不是紫蓝高饱和） */
 .gradient-text {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899) !important;
+  background: linear-gradient(135deg, #4b5563, #6b7280, #9ca3af) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
   background-clip: text !important;
@@ -46,7 +46,7 @@ code {
 
 /* 深色模式下的渐变文字 */
 [data-theme="dark"] .gradient-text {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6) !important;
+  background: linear-gradient(135deg, #e5e7eb, #d1d5db, #9ca3af) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
   background-clip: text !important;

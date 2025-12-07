@@ -24,7 +24,7 @@ const Governance = () => {
           proposer: '0x742d35Cc6634C0532925a3b8D4C9Db96C4B4d8b6',
           forVotes: 156,
           againstVotes: 29, 
-          endTime: '2024-03-05',
+          endTime: '2025-12-15',
           description: '通过创作优质作品获得平台积分奖励'
         },
       { 
@@ -33,8 +33,8 @@ const Governance = () => {
         status: '投票中', 
         forVotes: 71, 
         againstVotes: 29, 
-        endTime: '2024-03-05',
-        description: '通过质押优质作品获得平台代币奖励'
+        endTime: '2025-12-15',
+        description: '通过优质作品获得平台积分奖励'
       },
       { 
         id: 3, 
@@ -42,7 +42,7 @@ const Governance = () => {
         status: '已通过', 
         forVotes: 85, 
         againstVotes: 15, 
-        endTime: '2024-01-31',
+        endTime: '2025-12-10',
         description: '设立专项基金奖励杰出创作者和活跃贡献者'
       }
     ];

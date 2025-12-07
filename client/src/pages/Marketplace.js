@@ -40,35 +40,60 @@ const Marketplace = () => {
     const loadCreations = async () => {
       try {
         setLoading(true);
+        // ????????????????????
+        const marketplaceResp = await apiService.getMarketplaceListings();
+        if (marketplaceResp && Array.isArray(marketplaceResp.listings) && marketplaceResp.listings.length > 0) {
+          const formatted = marketplaceResp.listings.map((item) => {
+            const creation = item.creation || item.listing || item;
+            const listing = item.listing || {};
+            return {
+              id: creation.id || creation.ID || String(creation.token_id || creation.TokenID || ''),
+              creation_id: creation.id || creation.ID,
+              token_id: creation.token_id || creation.TokenID,
+              title: creation.title || creation.Title || '?????',
+              description: creation.description || creation.Description || '',
+              image: creation.image_url || creation.ImageURL || creation.image || '',
+              creator: creation.creator_address || creation.CreatorAddress || '',
+              creatorName: creation.creator?.name || creation.Creator?.Name || '?????',
+              price: listing.price ?? creation.price_in_points ?? creation.PriceInPoints ?? 0,
+              price_in_points: listing.price ?? creation.price_in_points ?? creation.PriceInPoints ?? 0,
+              creationType: creation.creation_type || creation.CreationType || 'image',
+              likes: creation.likes || 0,
+              views: creation.views || 0,
+              tags: creation.tags || [],
+              createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString(),
+            };
+          });
+          setCreations(formatted);
+          return;
+        }
+
         const response = await apiService.getCreations();
         if (response && response.creations && Array.isArray(response.creations)) {
-          // 转换后端数据格式以匹配前端期望的格式
-          const formattedCreations = response.creations.map(creation => ({
+          const formattedCreations = response.creations.map((creation) => ({
             id: creation.id || creation.ID || String(creation.token_id || creation.TokenID || ''),
-            creation_id: creation.id || creation.ID, // 后端数据库ID
+            creation_id: creation.id || creation.ID,
             token_id: creation.token_id || creation.TokenID,
-            title: creation.title || creation.Title || '未命名创作',
+            title: creation.title || creation.Title || '?????',
             description: creation.description || creation.Description || '',
             image: creation.image_url || creation.ImageURL || creation.image || '',
             creator: creation.creator_address || creation.CreatorAddress || '',
-            creatorName: creation.creator?.name || creation.Creator?.Name || '未知创作者',
+            creatorName: creation.creator?.name || creation.Creator?.Name || '?????',
             price: creation.price_in_points || creation.PriceInPoints || 0,
             price_in_points: creation.price_in_points || creation.PriceInPoints || 0,
             creationType: creation.creation_type || creation.CreationType || 'image',
             likes: creation.likes || 0,
             views: creation.views || 0,
             tags: creation.tags || [],
-            createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString()
+            createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString(),
           }));
           setCreations(formattedCreations);
         } else {
-          // 如果后端没有数据，使用mock数据作为fallback
-          console.warn('后端未返回创作数据，使用mock数据');
+          console.warn('????????????mock??');
           setCreations(mockCreations);
         }
       } catch (error) {
-        console.error('加载创作数据失败:', error);
-        // 如果API调用失败，使用mock数据作为fallback
+        console.error('????????:', error);
         setCreations(mockCreations);
       } finally {
         setLoading(false);

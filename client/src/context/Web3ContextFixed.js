@@ -541,9 +541,27 @@ export const Web3Provider = ({ children }) => {
       }
 
       // 请求账户访问权限
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
+      // 根治：优先使用 wallet_requestPermissions，让用户可以重新勾选要授权的网站账号
+      let accounts;
+      try {
+        console.log('📋 尝试使用 wallet_requestPermissions 获取账户权限...');
+        await window.ethereum.request({
+          method: 'wallet_requestPermissions',
+          params: [{ eth_accounts: {} }]
+        });
+
+        accounts = await window.ethereum.request({
+          method: 'eth_accounts'
+        });
+
+        console.log('✅ wallet_requestPermissions 获取到账户:', accounts);
+      } catch (permError) {
+        console.warn('⚠️ wallet_requestPermissions 失败，回退到 eth_requestAccounts:', permError);
+
+        accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts'
+        });
+      }
 
       if (!accounts || accounts.length === 0) {
         throw new Error('未获取到账户信息');
@@ -824,6 +842,89 @@ export const Web3Provider = ({ children }) => {
     setIsLoading(false);
   }, []);
 
+  // 刷新账户列表 - 重新请求账户访问权限以获取最新账户
+  const refreshAccountList = useCallback(async () => {
+    try {
+      if (typeof window.ethereum === 'undefined') {
+        throw new Error('未检测到MetaMask');
+      }
+
+      console.log('🔄 开始刷新账户列表...');
+
+      // 方法1: 使用 wallet_requestPermissions 来重新请求权限
+      // 这会让 MetaMask 显示权限请求对话框，用户可以选择要授权的账户
+      try {
+        console.log('📋 尝试使用 wallet_requestPermissions 重新请求权限...');
+        const permissions = await window.ethereum.request({
+          method: 'wallet_requestPermissions',
+          params: [{ eth_accounts: {} }]
+        });
+        
+        console.log('✅ 权限请求成功:', permissions);
+        
+        // 获取授权后的账户列表
+        const accounts = await window.ethereum.request({
+          method: 'eth_accounts'
+        });
+
+        if (accounts && accounts.length > 0) {
+          setAvailableAccounts(accounts);
+          console.log('✅ 通过 wallet_requestPermissions 刷新账户列表，找到', accounts.length, '个账户:', accounts);
+          toast.success(`已刷新，找到 ${accounts.length} 个账户`);
+          return accounts;
+        }
+      } catch (permError) {
+        // 如果 wallet_requestPermissions 失败（可能用户取消了或方法不支持）
+        console.log('⚠️ wallet_requestPermissions 失败，尝试备用方法:', permError);
+        
+        // 如果用户取消了，直接返回
+        if (permError.code === 4001) {
+          toast.info('请在 MetaMask 中切换到您想要的账户，然后再次点击刷新');
+          return availableAccounts;
+        }
+      }
+
+      // 方法2: 备用方法 - 直接使用 eth_requestAccounts
+      // 注意：如果已经授权过，这可能不会显示账户选择对话框
+      console.log('📋 尝试使用 eth_requestAccounts 获取账户...');
+      let accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      if (!accounts || accounts.length === 0) {
+        // 如果还是没有账户，尝试获取当前 MetaMask 中选中的账户
+        accounts = await window.ethereum.request({
+          method: 'eth_accounts'
+        });
+        
+        if (!accounts || accounts.length === 0) {
+          throw new Error('未获取到账户信息。请确保在 MetaMask 中已创建账户并已授权');
+        }
+      }
+
+      // 更新可用账户列表
+      setAvailableAccounts(accounts);
+      console.log('✅ 账户列表已刷新，找到', accounts.length, '个账户:', accounts);
+      
+      if (accounts.length === 1) {
+        toast.success('已刷新账户列表');
+      } else {
+        toast.success(`已刷新，找到 ${accounts.length} 个账户`);
+      }
+      
+      return accounts;
+    } catch (error) {
+      console.error('❌ 刷新账户列表失败:', error);
+      if (error.code === 4001) {
+        // 用户取消了请求
+        toast.info('请在 MetaMask 中切换到您想要的账户，然后再次点击刷新');
+        return availableAccounts;
+      }
+      toast.error('刷新账户列表失败: ' + (error.message || '未知错误'));
+      throw error;
+    }
+  }, [availableAccounts]);
+
   // 强制刷新连接 - 解决账户不同步问题
   const forceRefreshConnection = useCallback(async () => {
     try {
@@ -919,6 +1020,7 @@ export const Web3Provider = ({ children }) => {
         onClose={handleCloseAccountSelector}
         onSelect={handleAccountSelect}
         accounts={availableAccounts}
+        onRefresh={refreshAccountList}
       />
     </Web3Context.Provider>
   );

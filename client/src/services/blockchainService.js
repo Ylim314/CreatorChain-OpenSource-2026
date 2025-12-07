@@ -25,7 +25,7 @@ const CONTRACT_ADDRESSES = {
 // 获取有效的合约地址（自动校验和格式化）
 const getValidContractAddress = (chainId) => {
   const address = CONTRACT_ADDRESSES[chainId];
-  if (!address) return null;
+if (!address) return null;
   
   try {
     // 使用ethers.js自动校验和格式化地址

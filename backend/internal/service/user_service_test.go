@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -62,7 +63,12 @@ func buildSignedPayload(t *testing.T, privKey *ecdsa.PrivateKey, timestamp strin
 	t.Helper()
 	address = crypto.PubkeyToAddress(privKey.PublicKey).Hex()
 	message = security.BuildSignedMessage(address, timestamp)
-	hash := crypto.Keccak256Hash([]byte(message))
+
+	msgBytes := []byte(message)
+	prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(msgBytes))
+	prefixed := append([]byte(prefix), msgBytes...)
+
+	hash := crypto.Keccak256Hash(prefixed)
 	sigBytes, err := crypto.Sign(hash.Bytes(), privKey)
 	if err != nil {
 		t.Fatalf("sign failed: %v", err)

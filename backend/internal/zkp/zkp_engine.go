@@ -119,7 +119,7 @@ type ZKResponse struct {
 
 // NewZKVerifier 创建零知识证明验证器
 func NewZKVerifier() *ZKVerifier {
-	// 使用secp256k1椭圆曲线参数(与比特币/以太坊相同)
+	// 使用secp256k1椭圆曲线参数（标准加密算法）
 	// p = 2^256 - 2^32 - 977 (椭圆曲线的素数模)
 	prime, _ := new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
 	generator := big.NewInt(2) // 生成元g

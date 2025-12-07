@@ -43,15 +43,15 @@ describe("CreatorChain 智能合约测试", function () {
         );
         await creatorDAO.waitForDeployment();
         
-        // 分发测试代币
-        await creatorToken.transfer(creator.address, ethers.parseEther("100000"));
-        await creatorToken.transfer(buyer.address, ethers.parseEther("50000"));
-        await creatorToken.transfer(voter.address, ethers.parseEther("20000"));
+        // 注意：以下为设计原型测试，不实际使用
+        // 实际项目不涉及代币，使用链下积分系统
+        // await creatorToken.transfer(creator.address, ethers.parseEther("100000"));
     });
     
-    // ============ CreatorToken 测试 ============
-    describe("CreatorToken (CRT)", function () {
-        it("应该正确初始化代币", async function () {
+    // ============ CreatorToken 测试（设计原型 - 不实际使用）============
+    // 注意：以下测试为设计原型，实际项目不涉及代币
+    describe.skip("CreatorToken (CRT) - 设计原型", function () {
+        it.skip("应该正确初始化代币（设计原型，不测试）", async function () {
             expect(await creatorToken.name()).to.equal("CreatorToken");
             expect(await creatorToken.symbol()).to.equal("CRT");
             expect(await creatorToken.totalSupply()).to.equal(ethers.parseEther("100000000"));

@@ -45,19 +45,23 @@ func NewCreationHandler(creationService service.CreationService) *CreationHandle
 
 // CreateCreationRequest 创建作品请求
 type CreateCreationRequest struct {
+	TokenID           int64  `json:"token_id"`
 	Title             string `json:"title" binding:"required"`
 	Description       string `json:"description"`
+	Visibility        string `json:"visibility"`
 	ContentHash       string `json:"content_hash" binding:"required"`
 	ImageURL          string `json:"image_url"`
 	MetadataHash      string `json:"metadata_hash" binding:"required"`
 	AIModel           string `json:"ai_model"`
 	PromptText        string `json:"prompt_text"`
 	ContributionScore int    `json:"contribution_score"`
-	// 两次确权流程相关字段
-	CreationProcessHash string `json:"creation_process_hash"` // 创作过程哈希
-	IntermediateSteps   string `json:"intermediate_steps"`    // 中间步骤记录
-	FinalConfirmation   bool   `json:"final_confirmation"`    // 最终确认标志
-	VerificationProof   string `json:"verification_proof"`    // 验证证明
+	PriceInPoints     int64  `json:"price_in_points"`
+	LicenseDuration   int    `json:"license_duration"`
+	// ??????????
+	CreationProcessHash string `json:"creation_process_hash"` // ??????
+	IntermediateSteps   string `json:"intermediate_steps"`    // ??????
+	FinalConfirmation   bool   `json:"final_confirmation"`    // ??????
+	VerificationProof   string `json:"verification_proof"`    // ????
 }
 
 // CreateCreation 创建作品 - 企业级安全验证
@@ -75,30 +79,54 @@ func (h *CreationHandler) CreateCreation(c *gin.Context) {
 		return
 	}
 
-	// 验证输入数据
+	// ??????
 	if err := validateCreationInput(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 创建创作对象
+	visibility, err := normalizeVisibilityInput(req.Visibility)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ?????????
+	if req.PriceInPoints < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Price cannot be negative"})
+		return
+	}
+	licenseDuration := req.LicenseDuration
+	if licenseDuration == 0 {
+		licenseDuration = 12
+	} else if licenseDuration < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "License duration cannot be negative"})
+		return
+	}
+
+	// ??????
 	creation := &repository.Creation{
+		TokenID:             req.TokenID,
 		CreatorAddress:      creatorAddress,
 		Title:               strings.TrimSpace(req.Title),
 		Description:         strings.TrimSpace(req.Description),
+		Visibility:          visibility,
 		ContentHash:         strings.TrimSpace(req.ContentHash),
 		MetadataHash:        strings.TrimSpace(req.MetadataHash),
 		ImageURL:            strings.TrimSpace(req.ImageURL),
 		AIModel:             strings.TrimSpace(req.AIModel),
 		PromptText:          strings.TrimSpace(req.PromptText),
 		ContributionScore:   req.ContributionScore,
+		PriceInPoints:       req.PriceInPoints,
+		LicenseDuration:     licenseDuration,
+		IsListed:            false,
 		CreationProcessHash: strings.TrimSpace(req.CreationProcessHash),
 		IntermediateSteps:   strings.TrimSpace(req.IntermediateSteps),
 		FinalConfirmation:   req.FinalConfirmation,
 		VerificationProof:   strings.TrimSpace(req.VerificationProof),
 	}
 
-	// 创建创作记录
+	// ??????
 	if err := h.creationService.CreateCreation(creation); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create creation: " + err.Error()})
 		return
@@ -170,7 +198,15 @@ func (h *CreationHandler) UpdateCreation(c *gin.Context) {
 		return
 	}
 
-	var req CreateCreationRequest
+	var req struct {
+		Title           string  `json:"title"`
+		Description     string  `json:"description"`
+		Visibility      *string `json:"visibility"`
+		AIModel         string  `json:"ai_model"`
+		PromptText      string  `json:"prompt_text"`
+		PriceInPoints   *int64  `json:"price_in_points"`  // 使用指针，允许设置为0
+		LicenseDuration *int    `json:"license_duration"` // 使用指针，允许设置为0
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -182,11 +218,56 @@ func (h *CreationHandler) UpdateCreation(c *gin.Context) {
 		return
 	}
 
+	// 验证创作者权限
+	creatorAddress := c.GetHeader("User-Address")
+	if creatorAddress == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing User-Address header"})
+		return
+	}
+	if strings.ToLower(creation.CreatorAddress) != strings.ToLower(creatorAddress) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own creations"})
+		return
+	}
+
 	// 更新作品信息
-	creation.Title = req.Title
-	creation.Description = req.Description
-	creation.AIModel = req.AIModel
-	creation.PromptText = req.PromptText
+	if req.Title != "" {
+		creation.Title = strings.TrimSpace(req.Title)
+	}
+	if req.Description != "" {
+		creation.Description = strings.TrimSpace(req.Description)
+	}
+	if req.AIModel != "" {
+		creation.AIModel = strings.TrimSpace(req.AIModel)
+	}
+	if req.PromptText != "" {
+		creation.PromptText = strings.TrimSpace(req.PromptText)
+	}
+	if req.Visibility != nil {
+		vis, err := normalizeVisibilityInput(*req.Visibility)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		creation.Visibility = vis
+	}
+
+	// 更新价格和授权时长
+	if req.PriceInPoints != nil {
+		if *req.PriceInPoints < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Price cannot be negative"})
+			return
+		}
+		creation.PriceInPoints = *req.PriceInPoints
+		creation.IsListed = *req.PriceInPoints > 0 // 如果设置了价格，自动上架
+	}
+
+	if req.LicenseDuration != nil {
+		if *req.LicenseDuration <= 0 || *req.LicenseDuration > 120 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "License duration must be between 1 and 120 months"})
+			return
+		}
+		creation.LicenseDuration = *req.LicenseDuration
+	}
 
 	if err := h.creationService.UpdateCreation(creation); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update creation"})
@@ -461,6 +542,11 @@ func (h *CreationHandler) GetCreationVerificationStatus(c *gin.Context) {
 
 // validateCreationInput 验证创作输入数据 - 企业级安全验证
 func validateCreationInput(req *CreateCreationRequest) error {
+	// ??TokenID????????0?
+	if req.TokenID < 0 {
+		return errors.New("token_id must be zero or a positive integer")
+	}
+
 	// 验证标题
 	if len(strings.TrimSpace(req.Title)) == 0 {
 		return errors.New("title cannot be empty")
@@ -509,6 +595,17 @@ func validateCreationInput(req *CreateCreationRequest) error {
 	}
 
 	return nil
+}
+
+func normalizeVisibilityInput(value string) (string, error) {
+	visibility := strings.ToLower(strings.TrimSpace(value))
+	if visibility == "" {
+		return "private", nil
+	}
+	if visibility != "public" && visibility != "private" {
+		return "", errors.New("visibility must be 'public' or 'private'")
+	}
+	return visibility, nil
 }
 
 // mintNFTCreation 铸造NFT的具体实现

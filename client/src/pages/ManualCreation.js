@@ -58,7 +58,24 @@ const manualCreationTypes = [
     icon: "🎵", 
     description: "音乐、播客、音效等",
     maxSize: 100 * 1024 * 1024, // 100MB
-    acceptedTypes: ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/ogg']
+    acceptedTypes: [
+      'audio/mpeg',      // .mp3
+      'audio/mp3',       // .mp3 (某些浏览器)
+      'audio/wav',       // .wav
+      'audio/wave',      // .wav (某些浏览器)
+      'audio/x-wav',     // .wav (某些浏览器)
+      'audio/ogg',       // .ogg
+      'audio/opus',      // .opus
+      'audio/mp4',       // .m4a (iOS/Android录音)
+      'audio/x-m4a',     // .m4a (某些浏览器)
+      'audio/aac',       // .aac
+      'audio/aacp',      // .aac (某些浏览器)
+      'audio/3gpp',      // .3gp (Android录音)
+      'audio/amr',       // .amr (Android录音)
+      'audio/x-caf',     // .caf (iOS录音)
+      'audio/flac',      // .flac
+      'audio/webm'       // .webm
+    ]
   },
   { 
     value: 3, 
@@ -247,11 +264,14 @@ const ManualCreation = () => {
 
       // 第五阶段：保存到后端数据库（可选）
       setSuccess('正在保存创作记录...');
+      let backendCreationRecord = null;
       try {
         // 构建符合后端API要求的请求数据
         const backendCreationData = {
+          token_id: registrationResult.creationId,
           title: title,
           description: description,
+          visibility: visibility || 'private',
           content_hash: fileHash, // 使用上传返回的路径作为content_hash
           metadata_hash: fileHash, // 暂时使用相同的hash
           image_url: fileHash, // 图片URL路径
@@ -267,8 +287,9 @@ const ManualCreation = () => {
           final_confirmation: false,
           verification_proof: ''
         };
-        await apiService.createCreation(backendCreationData);
-        console.log('数据库保存成功');
+        const creationResponse = await apiService.createCreation(backendCreationData);
+        backendCreationRecord = creationResponse?.data || creationResponse?.creation || null;
+        console.log('数据库保存成功', backendCreationRecord);
       } catch (dbError) {
         // 静默处理数据库错误，不影响用户体验
         console.debug('后端服务不可用，使用本地存储:', dbError.message);
@@ -312,22 +333,28 @@ const ManualCreation = () => {
       logger.info('创作确认成功:', confirmationResult);
 
       // 第八阶段：更新数据库状态（可选）
-      try {
-        await apiService.updateCreationStatus(registrationResult.creationId, {
-          status: 'confirmed',
-          metadataHash: metadataHash,
-          confirmationTx: confirmationResult.transactionHash,
-          confirmedAt: new Date().toISOString()
-        });
-        console.log('数据库状态更新成功');
-      } catch (dbError) {
-        // 静默处理数据库错误，不影响用户体验
-        console.debug('后端服务不可用，数据已保存到区块链:', dbError.message);
+      if (backendCreationRecord?.id) {
+        try {
+          await apiService.updateCreationStatus(backendCreationRecord.id, {
+            status: 'confirmed',
+            metadataHash: metadataHash,
+            confirmationTx: confirmationResult.transactionHash,
+            confirmedAt: new Date().toISOString()
+          });
+          console.log('数据库状态更新成功');
+        } catch (dbError) {
+          // 静默处理数据库错误，不影响用户体验
+          console.debug('后端服务不可用，数据已保存到区块链:', dbError.message);
+        }
+      } else {
+        console.debug('未获取到后端作品ID，跳过数据库状态更新');
       }
 
       // 保存到本地存储以便"我的作品"页面显示
+      const localCreationId = backendCreationRecord?.id || registrationResult.creationId;
       const localCreation = {
-        id: registrationResult.creationId,
+        id: localCreationId,
+        token_id: registrationResult.creationId,
         title: title,
         description: description,
         type: 'manual',
@@ -380,7 +407,7 @@ const ManualCreation = () => {
         navigate('/my-creations', { 
           state: { 
             newCreation: {
-              id: registrationResult.creationId,
+              id: localCreationId,
               title: title,
               confirmed: true
             }
@@ -648,7 +675,7 @@ const ManualCreation = () => {
                 label="创作时间"
                 value={creationTime}
                 onChange={(e) => setCreationTime(e.target.value)}
-                placeholder="例如：2024年1月，耗时3天"
+                placeholder="例如：2025年12月，耗时3天"
               />
             </Grid>
           </Grid>

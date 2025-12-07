@@ -25,6 +25,7 @@ CreatorChain is a blockchain-based digital creation copyright protection platfor
 - `backend/internal/service/` - Business logic layer with transaction support
 - `backend/internal/repository/` - Database access layer with models
 - `backend/internal/ai/` - Multi-AI model engine (智谱GLM, OpenAI fallback, Mock mode)
+- `backend/internal/analysis/` - Content analyzer for contribution assessment
 - `backend/internal/zkp/` - Cryptographic commitment scheme (Schnorr signatures, not full ZKP)
 - `backend/internal/security/` - Signature verification, timestamp validation, replay attack protection
 - `backend/internal/ipfs/` - IPFS client using Pinata API
@@ -32,7 +33,7 @@ CreatorChain is a blockchain-based digital creation copyright protection platfor
 - `client/src/pages/` - React pages (Home, Create, MyCreations, Marketplace, etc.)
 - `client/src/context/Web3ContextFixed.js` - Web3 wallet integration with signature-based auth
 - `client/src/services/apiService.js` - API client with auth headers (User-Address, Signature, Message, Timestamp)
-- `contracts/contracts/SimpleCreationRegistry.sol` - On-chain creation registry
+- `contracts/contracts/` - Smart contracts (SimpleCreationRegistry, CreatorNFT, CreatorDAO, LicenseManager, CreatorToken)
 
 ## Development Commands
 
@@ -118,18 +119,8 @@ REACT_APP_API_URL=http://localhost:8080
 - Package structure: `internal/` for private packages, `pkg/` for shared utilities
 - Repository pattern: `repository/` (DB access) → `service/` (business logic) → `api/` (HTTP handlers)
 - Error handling: Use `error_handler.go` for consistent error responses
-- Middleware stack order (see `main.go:282-299`):
-  1. ErrorHandler (unified error formatting)
-  2. Logger + Recovery
-  3. SecurityHeaders
-  4. SecureCORSMiddleware (uses CORS_ORIGINS whitelist)
-  5. RequestTimeoutMiddleware (if REQUEST_TIMEOUT_SECONDS > 0)
-  6. RequestSizeLimit (10MB)
-  7. InputSanitization
-  8. AuditLog
-  9. Metrics + Logs
-  10. RateLimit (if enabled)
-  11. ValidateJSON
+- Middleware stack order in `main.go` (order matters):
+  ErrorHandler → Logger/Recovery → SecurityHeaders → SecureCORSMiddleware → RequestTimeoutMiddleware → RequestSizeLimit (10MB) → InputSanitization → AuditLog → Metrics → RateLimit → ValidateJSON
 
 ### React (Frontend)
 - 2-space indentation
@@ -150,31 +141,21 @@ REACT_APP_API_URL=http://localhost:8080
 ### Backend Tests
 - Colocate tests with implementation: `user_service_test.go` next to `user_service.go`
 - Table-driven tests for multiple scenarios
-- Mock dependencies: Use interfaces for DB/Redis/AI/IPFS/Blockchain clients
-- Example: `backend/internal/service/user_service_test.go` shows signature verification tests
 - Security tests: `backend/internal/security/*_test.go` cover timestamp validation, replay guards
 
-Run tests:
 ```bash
 cd backend
 go test ./...                             # All tests
-go test ./internal/security -v            # Verbose output for security tests
+go test ./internal/security -v            # Verbose security tests
 go test -race ./...                       # Race condition detection
 ```
 
 ### Frontend Tests
 - Colocate with components: `components/__tests__/CreationCard.test.js`
-- Use React Testing Library for UI assertions
-- Jest for test runner
 
 ### Smart Contract Tests
 - Place in `contracts/test/` directory
-- Cover deployment, roles, permissions, and failure scenarios
-- Run coverage before changing access control logic:
-```bash
-cd contracts
-npx hardhat coverage
-```
+- Run `npx hardhat coverage` before changing access control logic
 
 ## Security & Authentication
 
