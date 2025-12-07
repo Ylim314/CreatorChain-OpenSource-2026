@@ -15,12 +15,13 @@ import {
   Button,
   Card,
   CardMedia,
-  CardContent,
-  CardActions
+  CardActions,
+  styled,
+  alpha
 } from '@mui/material';
 import {
   Send as SendIcon,
-  SmartToy as AIIcon,
+  AutoAwesome as AIIcon,
   Person as PersonIcon,
   Image as ImageIcon,
   TextFields as TextIcon,
@@ -29,6 +30,59 @@ import {
 } from '@mui/icons-material';
 import { useWeb3 } from '../context/Web3ContextFixed';
 import { useThemeMode } from '../context/ThemeModeContext';
+
+// 自定义样式组件
+const GradientPaper = styled(Paper)(({ theme, isDark }) => ({
+  background: isDark 
+    ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  backdropFilter: 'blur(10px)',
+  border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.2)',
+}));
+
+const MessageBubble = styled(Paper)(({ theme, isUser, isDark }) => ({
+  maxWidth: '75%',
+  padding: theme.spacing(2),
+  borderRadius: isUser ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+  background: isUser 
+    ? (isDark ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+    : (isDark ? alpha(theme.palette.background.paper, 0.8) : alpha('#fff', 0.95)),
+  backdropFilter: 'blur(10px)',
+  boxShadow: isUser 
+    ? '0 8px 32px rgba(102, 126, 234, 0.3)'
+    : '0 8px 32px rgba(0, 0, 0, 0.1)',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: isUser 
+      ? '0 12px 40px rgba(102, 126, 234, 0.4)'
+      : '0 12px 40px rgba(0, 0, 0, 0.15)',
+  }
+}));
+
+const StyledAvatar = styled(Avatar)(({ theme, isUser }) => ({
+  width: 40,
+  height: 40,
+  background: isUser 
+    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+}));
+
+const InputContainer = styled(Box)(({ theme, isDark }) => ({
+  background: isDark
+    ? alpha(theme.palette.background.paper, 0.6)
+    : alpha('#fff', 0.9),
+  backdropFilter: 'blur(20px)',
+  borderRadius: '24px',
+  padding: theme.spacing(1.5),
+  border: `2px solid ${isDark ? alpha('#667eea', 0.3) : alpha('#667eea', 0.2)}`,
+  transition: 'all 0.3s ease',
+  '&:focus-within': {
+    border: `2px solid ${isDark ? alpha('#667eea', 0.6) : alpha('#667eea', 0.5)}`,
+    boxShadow: `0 0 0 4px ${alpha('#667eea', 0.1)}`,
+  }
+}));
 
 const AIChat = () => {
   const { account } = useWeb3();
@@ -68,7 +122,7 @@ const AIChat = () => {
         setSelectedModel(models[0].id);
       }
     }
-  }, [account]);
+  }, [account, selectedModel]);
 
   // 发送消息
   const handleSendMessage = async () => {
@@ -185,26 +239,23 @@ const AIChat = () => {
         sx={{
           display: 'flex',
           flexDirection: isUser ? 'row-reverse' : 'row',
-          mb: 2,
-          alignItems: 'flex-start'
+          mb: 3,
+          alignItems: 'flex-start',
+          animation: 'slideIn 0.3s ease-out'
         }}
       >
-        <Avatar
-          sx={{
-            bgcolor: isError ? '#f44336' : (isUser ? '#1976d2' : '#4caf50'),
-            mx: 1
-          }}
-        >
+        <StyledAvatar isUser={isUser}>
           {isUser ? <PersonIcon /> : <AIIcon />}
-        </Avatar>
+        </StyledAvatar>
 
-        <Paper
-          elevation={2}
+        <MessageBubble
+          elevation={0}
+          isUser={isUser}
+          isDark={isDark}
           sx={{
-            maxWidth: '70%',
-            p: 2,
-            bgcolor: isError ? '#ffebee' : (isUser ? (isDark ? '#1e3a5f' : '#e3f2fd') : (isDark ? '#2d3748' : '#f5f5f5')),
-            borderRadius: 2
+            mx: 1.5,
+            bgcolor: isError ? alpha('#f44336', 0.1) : undefined,
+            border: isError ? '1px solid #f44336' : undefined
           }}
         >
           {/* 消息头部 */}
@@ -282,7 +333,7 @@ const AIChat = () => {
               </Typography>
             </Box>
           )}
-        </Paper>
+        </MessageBubble>
       </Box>
     );
   };
@@ -296,9 +347,17 @@ const AIChat = () => {
   };
 
   return (
-    <Box sx={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', p: 2 }}>
+    <Box sx={{ 
+      height: 'calc(100vh - 100px)', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      p: 3,
+      background: isDark 
+        ? 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)'
+        : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
+    }}>
       {/* 顶部工具栏 */}
-      <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
+      <GradientPaper elevation={0} isDark={isDark} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>选择AI模型</InputLabel>
@@ -354,17 +413,28 @@ const AIChat = () => {
             当前账户: {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : '未连接'}
           </Typography>
         </Box>
-      </Paper>
+      </GradientPaper>
 
       {/* 消息列表 */}
-      <Paper
-        elevation={3}
+      <GradientPaper
+        elevation={0}
+        isDark={isDark}
         sx={{
           flexGrow: 1,
           overflow: 'auto',
-          p: 2,
+          p: 3,
           mb: 2,
-          bgcolor: isDark ? '#1a1a1a' : '#fafafa'
+          borderRadius: 3,
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+            borderRadius: '4px',
+          },
         }}
       >
         {messages.length === 0 ? (
@@ -375,18 +445,59 @@ const AIChat = () => {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'text.secondary'
+              color: 'text.secondary',
+              textAlign: 'center',
+              animation: 'fadeIn 0.5s ease-in'
             }}
           >
-            <AIIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
-            <Typography variant="h6" gutterBottom>
-              欢迎使用AI创作助手
+            <Box
+              sx={{
+                width: 80,
+                height: 80,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mb: 3,
+                boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
+                animation: 'pulse 2s infinite'
+              }}
+            >
+              <AIIcon sx={{ fontSize: 40, color: 'white' }} />
+            </Box>
+            <Typography variant="h4" gutterBottom sx={{ 
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
+              欢迎使用AI智能创作
             </Typography>
-            <Typography variant="body2" align="center" sx={{ maxWidth: 400 }}>
-              在下方输入您的创作需求,AI将为您生成文本或图像作品
+            <Typography variant="body1" sx={{ maxWidth: 500, mt: 2, mb: 3, opacity: 0.8 }}>
+              🎨 在下方输入您的创作需求,AI将为您生成精美的文本或图像作品
             </Typography>
-            <Typography variant="caption" sx={{ mt: 2 }}>
-              提示: 使用Shift+Enter换行, Enter直接发送
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Chip 
+                icon={<TextIcon />}
+                label="文本生成" 
+                color="primary" 
+                variant="outlined"
+              />
+              <Chip 
+                icon={<ImageIcon />}
+                label="图像创作" 
+                color="secondary" 
+                variant="outlined"
+              />
+              <Chip 
+                label="一键上链" 
+                color="success" 
+                variant="outlined"
+              />
+            </Box>
+            <Typography variant="caption" sx={{ mt: 4, opacity: 0.6 }}>
+              💡 提示: 使用 Shift+Enter 换行, Enter 直接发送
             </Typography>
           </Box>
         ) : (
@@ -395,34 +506,55 @@ const AIChat = () => {
             <div ref={messagesEndRef} />
           </>
         )}
-      </Paper>
+      </GradientPaper>
 
       {/* 输入框 */}
-      <Paper elevation={3} sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+      <InputContainer isDark={isDark}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-end' }}>
           <TextField
             fullWidth
             multiline
             maxRows={4}
             placeholder={
               taskType === 'text'
-                ? '描述你想生成的文本内容... (例如: 写一篇关于区块链技术的文章)'
-                : '描述你想生成的图像... (例如: 一幅赛博朋克风格的未来城市,高清,8K)'
+                ? '✨ 描述你想生成的文本内容... (例如: 写一篇关于区块链技术的文章)'
+                : '🎨 描述你想生成的图像... (例如: 一幅赛博朋克风格的未来城市,霓虹灯光,高清,8K)'
             }
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={isGenerating || !selectedModel}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                border: 'none',
+                '& fieldset': { border: 'none' },
+                '&:hover fieldset': { border: 'none' },
+                '&.Mui-focused fieldset': { border: 'none' },
+              },
+              '& .MuiInputBase-input': {
+                fontSize: '1rem',
+                lineHeight: 1.6,
+              }
+            }}
           />
           <IconButton
-            color="primary"
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || isGenerating || !selectedModel}
             sx={{
-              bgcolor: 'primary.main',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
-              '&:hover': { bgcolor: 'primary.dark' },
-              '&:disabled': { bgcolor: 'action.disabledBackground' }
+              width: 48,
+              height: 48,
+              transition: 'all 0.3s ease',
+              '&:hover': { 
+                background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                transform: 'scale(1.05)',
+                boxShadow: '0 8px 24px rgba(102, 126, 234, 0.4)'
+              },
+              '&:disabled': { 
+                background: alpha('#667eea', 0.3),
+                transform: 'none'
+              }
             }}
           >
             {isGenerating ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
@@ -430,13 +562,48 @@ const AIChat = () => {
         </Box>
 
         {!selectedModel && (
-          <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+          <Typography variant="caption" color="error" sx={{ mt: 1.5, display: 'block' }}>
             ⚠️ 请先在"AI模型配置"页面配置模型
           </Typography>
         )}
-      </Paper>
+      </InputContainer>
     </Box>
   );
 };
 
 export default AIChat;
+
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+    }
+    50% {
+      transform: scale(1.05);
+      box-shadow: 0 15px 50px rgba(102, 126, 234, 0.5);
+    }
+  }
+`;
+if (!document.head.querySelector('style[data-ai-chat]')) {
+  style.setAttribute('data-ai-chat', 'true');
+  document.head.appendChild(style);
+}

@@ -16,7 +16,6 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import GettingStarted from './pages/GettingStarted';
 import BlockchainVerification from './pages/BlockchainVerification';
-import AICreationStudio from './pages/AICreationStudio';
 import CommunityEcosystem from './pages/CommunityEcosystem';
 import SmartContracts from './pages/SmartContracts';
 import DataAnalytics from './pages/DataAnalytics';
@@ -54,8 +53,6 @@ function App() {
         <Routes>
         <Route path="/" element={<AwesomeHome />} />
         <Route path="/blockchain-verification" element={<BlockchainVerification />} />
-        <Route path="/ai-creation-studio" element={<AICreationStudio />} />
-        <Route path="/ai-creation" element={<AICreationStudio />} />
         <Route path="/manual-creation" element={<ManualCreation />} />
         <Route path="/community-ecosystem" element={<CommunityEcosystem />} />
         <Route path="/smart-contracts" element={<SmartContracts />} />

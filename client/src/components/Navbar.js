@@ -235,13 +235,7 @@ const Navbar = () => {
                   <ListItemIcon>
                     <SmartToy sx={{ color: 'white' }} />
                   </ListItemIcon>
-                  <ListItemText primary="AI对话创作" sx={{ color: 'white' }} />
-                </MenuItem>
-                <MenuItem component={Link} to="/ai-creation-studio" onClick={handleCreateMenuClose}>
-                  <ListItemIcon>
-                    <SmartToy sx={{ color: 'white' }} />
-                  </ListItemIcon>
-                  <ListItemText primary="AI创作工坊(旧版)" sx={{ color: 'white' }} />
+                  <ListItemText primary="AI智能创作" sx={{ color: 'white' }} />
                 </MenuItem>
                 <MenuItem component={Link} to="/manual-creation" onClick={handleCreateMenuClose}>
                   <ListItemIcon>
