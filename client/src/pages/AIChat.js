@@ -26,10 +26,12 @@ import {
   Image as ImageIcon,
   TextFields as TextIcon,
   Save as SaveIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useWeb3 } from '../context/Web3ContextFixed';
 import { useThemeMode } from '../context/ThemeModeContext';
+import { useNavigate } from 'react-router-dom';
 
 // 自定义样式组件
 const GradientPaper = styled(Paper, {
@@ -95,6 +97,7 @@ const InputContainer = styled(Box, {
 const AIChat = () => {
   const { account } = useWeb3();
   const { mode } = useThemeMode();
+  const navigate = useNavigate();
   const isDark = mode === 'dark';
 
   // 状态管理
@@ -379,22 +382,23 @@ const AIChat = () => {
     }}>
       {/* 顶部工具栏 */}
       <GradientPaper elevation={0} $isDark={isDark} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel>选择AI模型</InputLabel>
-            <Select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              label="选择AI模型"
-              size="small"
-            >
-              {userModels.map(model => (
-                <MenuItem key={model.id} value={model.id}>
-                  {model.name} ({model.provider})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel>选择AI模型</InputLabel>
+              <Select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                label="选择AI模型"
+                size="small"
+              >
+                {userModels.map(model => (
+                  <MenuItem key={model.id} value={model.id}>
+                    {model.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
           <FormControl sx={{ minWidth: 150 }}>
             <InputLabel>任务类型</InputLabel>
@@ -419,20 +423,31 @@ const AIChat = () => {
             </Select>
           </FormControl>
 
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => setMessages([])}
+              disabled={messages.length === 0}
+            >
+              清空对话
+            </Button>
+
+            <Typography variant="caption" color="text.secondary">
+              当前账户: {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : '未连接'}
+            </Typography>
+          </Box>
+
           <Button
             variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => setMessages([])}
-            disabled={messages.length === 0}
+            startIcon={<SettingsIcon />}
+            onClick={() => navigate('/ai-model-config')}
+            sx={{ 
+              borderRadius: 2,
+              textTransform: 'none'
+            }}
           >
-            清空对话
+            设置
           </Button>
-
-          <Box sx={{ flexGrow: 1 }} />
-
-          <Typography variant="caption" color="text.secondary">
-            当前账户: {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : '未连接'}
-          </Typography>
         </Box>
       </GradientPaper>
 
