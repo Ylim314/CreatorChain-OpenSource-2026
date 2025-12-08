@@ -46,13 +46,20 @@ const Marketplace = () => {
           const formatted = marketplaceResp.listings.map((item) => {
             const creation = item.creation || item.listing || item;
             const listing = item.listing || {};
+            
+            // 处理图片URL，如果是相对路径则加上后端域名
+            let imageUrl = creation.image_url || creation.ImageURL || creation.image || '';
+            if (imageUrl && imageUrl.startsWith('/')) {
+              imageUrl = `http://localhost:8080${imageUrl}`;
+            }
+            
             return {
               id: creation.id || creation.ID || String(creation.token_id || creation.TokenID || ''),
               creation_id: creation.id || creation.ID,
               token_id: creation.token_id || creation.TokenID,
               title: creation.title || creation.Title || '?????',
               description: creation.description || creation.Description || '',
-              image: creation.image_url || creation.ImageURL || creation.image || '',
+              image: imageUrl,
               creator: creation.creator_address || creation.CreatorAddress || '',
               creatorName: creation.creator?.name || creation.Creator?.Name || '?????',
               price: listing.price ?? creation.price_in_points ?? creation.PriceInPoints ?? 0,
@@ -70,23 +77,31 @@ const Marketplace = () => {
 
         const response = await apiService.getCreations();
         if (response && response.creations && Array.isArray(response.creations)) {
-          const formattedCreations = response.creations.map((creation) => ({
-            id: creation.id || creation.ID || String(creation.token_id || creation.TokenID || ''),
-            creation_id: creation.id || creation.ID,
-            token_id: creation.token_id || creation.TokenID,
-            title: creation.title || creation.Title || '?????',
-            description: creation.description || creation.Description || '',
-            image: creation.image_url || creation.ImageURL || creation.image || '',
-            creator: creation.creator_address || creation.CreatorAddress || '',
-            creatorName: creation.creator?.name || creation.Creator?.Name || '?????',
-            price: creation.price_in_points || creation.PriceInPoints || 0,
-            price_in_points: creation.price_in_points || creation.PriceInPoints || 0,
-            creationType: creation.creation_type || creation.CreationType || 'image',
-            likes: creation.likes || 0,
-            views: creation.views || 0,
-            tags: creation.tags || [],
-            createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString(),
-          }));
+          const formattedCreations = response.creations.map((creation) => {
+            // 处理图片URL，如果是相对路径则加上后端域名
+            let imageUrl = creation.image_url || creation.ImageURL || creation.image || '';
+            if (imageUrl && imageUrl.startsWith('/')) {
+              imageUrl = `http://localhost:8080${imageUrl}`;
+            }
+            
+            return {
+              id: creation.id || creation.ID || String(creation.token_id || creation.TokenID || ''),
+              creation_id: creation.id || creation.ID,
+              token_id: creation.token_id || creation.TokenID,
+              title: creation.title || creation.Title || '?????',
+              description: creation.description || creation.Description || '',
+              image: imageUrl,
+              creator: creation.creator_address || creation.CreatorAddress || '',
+              creatorName: creation.creator?.name || creation.Creator?.Name || '?????',
+              price: creation.price_in_points || creation.PriceInPoints || 0,
+              price_in_points: creation.price_in_points || creation.PriceInPoints || 0,
+              creationType: creation.creation_type || creation.CreationType || 'image',
+              likes: creation.likes || 0,
+              views: creation.views || 0,
+              tags: creation.tags || [],
+              createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString(),
+            };
+          });
           setCreations(formattedCreations);
         } else {
           console.warn('????????????mock??');
@@ -502,7 +517,7 @@ const Marketplace = () => {
         index === self.findIndex(creation => creation.id === item.id)
       )
     : creations.filter((item, index, self) => 
-        item.type === activeTab && index === self.findIndex(creation => creation.id === item.id)
+        (item.creationType === activeTab || item.type === activeTab) && index === self.findIndex(creation => creation.id === item.id)
       );
 
   // Market statistics

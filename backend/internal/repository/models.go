@@ -36,7 +36,7 @@ type Creation struct {
 	CreatorAddress    string `json:"creator_address" gorm:"size:42;not null"`
 	Title             string `json:"title" gorm:"size:200;not null"`
 	Description       string `json:"description"`
-	Visibility        string `json:"visibility" gorm:"size:10;default:'private'"` // public/private
+	Visibility        string `json:"visibility" gorm:"size:10;default:'public'"` // public/private
 	ContentHash       string `json:"content_hash" gorm:"size:64;not null"`
 	MetadataHash      string `json:"metadata_hash" gorm:"size:64;not null"`
 	ImageURL          string `json:"image_url" gorm:"size:500"` // 图片访问URL

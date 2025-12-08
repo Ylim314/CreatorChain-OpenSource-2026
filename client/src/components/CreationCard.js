@@ -83,7 +83,12 @@ const CreationCard = ({ creation }) => {
       <CardMedia
         component="img"
         height="200"
-        image={creation.contentHash ? makeGatewayURL(creation.contentHash) : '/placeholder.jpg'}
+        image={
+          creation.image || 
+          creation.image_url || 
+          creation.imageUrl ||
+          (creation.contentHash ? makeGatewayURL(creation.contentHash) : '/placeholder.jpg')
+        }
         alt={creation.title || '创作作品'}
         loading="lazy"
         sx={{ objectFit: 'cover' }}

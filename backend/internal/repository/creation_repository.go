@@ -76,8 +76,9 @@ func (r *creationRepository) Delete(id uint) error {
 // List 获取作品列表
 func (r *creationRepository) List(offset, limit int) ([]*Creation, error) {
 	var creations []*Creation
+	// 公开接口只返回visibility=public或者已上架的作品
 	err := r.db.Preload("Creator").
-		Where("visibility = ?", "public").
+		Where("visibility = ? OR is_listed = ?", "public", true).
 		Offset(offset).Limit(limit).
 		Order("created_at DESC").
 		Find(&creations).Error
@@ -87,9 +88,10 @@ func (r *creationRepository) List(offset, limit int) ([]*Creation, error) {
 // GetMarketListings 获取市场列表
 func (r *creationRepository) GetMarketListings(offset, limit int) ([]*Creation, error) {
 	var creations []*Creation
+	// 市场列表只要is_listed=true就显示，不再过滤visibility
+	// 因为上架即表示公开售卖
 	err := r.db.Preload("Creator").
 		Where("is_listed = ?", true).
-		Where("visibility = ?", "public").
 		Offset(offset).Limit(limit).
 		Order("created_at DESC").
 		Find(&creations).Error
