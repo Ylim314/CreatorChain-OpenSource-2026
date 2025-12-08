@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Typography, Container, Link, IconButton } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { GitHub, Twitter, Telegram } from '@mui/icons-material';
+import { GitHub, Telegram } from '@mui/icons-material';
+import XIcon from '@mui/icons-material/X';
 
 const Footer = () => {
   return (
@@ -91,7 +92,7 @@ const Footer = () => {
               <GitHub />
             </IconButton>
             <IconButton 
-              href="https://twitter.com" 
+              href="https://x.com" 
               target="_blank" 
               rel="noopener noreferrer"
               sx={{
@@ -105,7 +106,7 @@ const Footer = () => {
                 transition: 'all 0.3s ease'
               }}
             >
-              <Twitter />
+              <XIcon />
             </IconButton>
             <IconButton 
               href="https://telegram.org" 

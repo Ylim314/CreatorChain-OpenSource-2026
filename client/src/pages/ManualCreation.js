@@ -804,15 +804,17 @@ const ManualCreation = () => {
     }
   };
 
-  // 如果没有连接钱包，显示提示
+  // 如果没有连接钱包,显示提示
   if (!connected) {
     return (
       <Box sx={{ 
         minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
         background: isDark ? '#050816' : '#f5f5f5'
       }}>
         <Navbar />
-        <Container maxWidth="lg" sx={{ py: 8, textAlign: 'center' }}>
+        <Container maxWidth="lg" sx={{ py: 8, textAlign: 'center', flex: 1 }}>
           <Typography 
             variant="h4" 
             sx={{ 
@@ -848,10 +850,12 @@ const ManualCreation = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
       background: isDark ? '#050816' : '#f5f5f5'
     }}>
       <Navbar />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
         <Box sx={{ textAlign: 'center', mb: 6 }}>
           <Typography 
             variant="h3" 
