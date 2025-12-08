@@ -609,11 +609,13 @@ const ManualCreation = () => {
               </Box>
             </Grid>
             <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>作品可见性</InputLabel>
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel id="visibility-label">作品可见性</InputLabel>
                 <Select
+                  labelId="visibility-label"
                   value={visibility}
                   onChange={(e) => setVisibility(e.target.value)}
+                  label="作品可见性"
                 >
                   <MenuItem value="public">🌍 公开 - 所有人可见</MenuItem>
                   <MenuItem value="private">🔒 私密 - 仅自己可见</MenuItem>
