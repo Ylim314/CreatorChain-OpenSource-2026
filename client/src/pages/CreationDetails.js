@@ -67,18 +67,53 @@ const CreationDetails = () => {
 
   useEffect(() => {
     const run = async () => {
-      // 如果没连上合约或合约为空，先用本地样品兜底
-      if ((!contracts || !contracts.creationRegistry) && id) {
-        const local = mockCreations.find(c => String(c.id) === String(id));
-        if (local) {
-          setCreation(local);
+      setIsLoading(true);
+      setError('');
+      
+      // 优先从后端加载创作数据
+      if (id) {
+        try {
+          const backendData = await apiService.getCreation(id);
+          if (backendData) {
+            setBackendCreation(backendData);
+            
+            // 处理图片URL
+            let imageUrl = backendData.image_url || backendData.ImageURL || backendData.image || '';
+            if (imageUrl && imageUrl.startsWith('/')) {
+              imageUrl = `http://localhost:8080${imageUrl}`;
+            }
+            
+            // 设置作品数据
+            setCreation({
+              id: backendData.id || backendData.ID,
+              title: backendData.title || backendData.Title,
+              description: backendData.description || backendData.Description,
+              image: imageUrl,
+              contentHash: backendData.content_hash || backendData.ContentHash,
+              metadataHash: backendData.metadata_hash || backendData.MetadataHash,
+              creator: backendData.creator_address || backendData.CreatorAddress,
+              owner: backendData.creator_address || backendData.CreatorAddress,
+              price: backendData.price_in_points || backendData.PriceInPoints || 0,
+              aiModel: backendData.ai_model || backendData.AIModel || 'N/A',
+              prompt: backendData.prompt_text || backendData.PromptText || 'N/A',
+              parameters: 'N/A',
+              creationType: backendData.creation_type || backendData.CreationType || 'image',
+              likes: backendData.likes || 0,
+              views: backendData.views || 0,
+              contributors: [],
+              createdAt: backendData.created_at || backendData.CreatedAt,
+            });
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.warn('从后端加载创作详情失败:', error);
         }
       }
-      if (contracts && id) {
+      
+      // 备用：尝试从区块链加载
+      if (contracts && contracts.creationRegistry && id) {
         try {
-          setIsLoading(true);
-          setError('');
-
           const tokenURI = await contracts.creationRegistry.tokenURI(id);
           const metadataUrl = makeGatewayURL(tokenURI.replace('ipfs://', ''));
 
@@ -91,26 +126,26 @@ const CreationDetails = () => {
 
           setCreation({ id, owner, ...metadata, ...creationData });
         } catch (error) {
-          // 加载Token ID失败
-          setError('加载创作详情失败，请刷新页面重试');
-        } finally {
-          setIsLoading(false);
-        }
-      }
-
-      // 尝试从后端加载创作数据，以便获取正确的 token_id（用于授权购买与积分结算）
-      if (id) {
-        try {
-          const backendData = await apiService.getCreation(id);
-          if (backendData) {
-            setBackendCreation(backendData);
-            // 如果当前没有设置creation，则使用后端数据作为展示
-            setCreation(prev => prev || backendData);
+          console.error('从区块链加载失败:', error);
+          // 最后兜底：使用Mock数据
+          const local = mockCreations.find(c => String(c.id) === String(id));
+          if (local) {
+            setCreation(local);
+          } else {
+            setError('作品不存在');
           }
-        } catch (error) {
-          console.warn('从后端加载创作详情失败（可能仅存在于本地或链上）:', error);
+        }
+      } else {
+        // 无区块链连接时使用Mock数据
+        const local = mockCreations.find(c => String(c.id) === String(id));
+        if (local) {
+          setCreation(local);
+        } else {
+          setError('作品不存在');
         }
       }
+      
+      setIsLoading(false);
     };
     run();
   }, [contracts, id]);
