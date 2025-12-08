@@ -53,26 +53,50 @@ const Profile = () => {
       setIsLoading(true);
       setError('');
       try {
-        // const profile = await apiService.getUserProfile(targetAddress);
-        // const userCreations = await apiService.getUserCreations(targetAddress);
-        // setProfileData(profile);
-        // setCreations(userCreations);
-        
-        // Mock data for now - 企业级安全实现
+        // 从API获取真实数据
         const sanitizedAddress = sanitizeInput(targetAddress);
+        
+        // 设置用户基本信息
         setProfileData({ 
           address: sanitizedAddress, 
           bio: 'A passionate digital artist and creator.', 
           username: `Creator-${sanitizedAddress.slice(0, 6)}` 
         });
-        setCreations([
-          { id: 1, title: "AI生成艺术作品", contentHash: "Qm...", creator: targetAddress },
-          { id: 2, title: "数字音乐创作", contentHash: "Qm...", creator: targetAddress },
-        ]);
+        
+        // 从API获取该用户的作品列表
+        try {
+          const response = await apiService.getCreationsByCreator(sanitizedAddress);
+          if (response && response.creations && Array.isArray(response.creations)) {
+            const formattedCreations = response.creations.map((creation) => {
+              // 处理图片URL
+              let imageUrl = creation.image_url || creation.ImageURL || creation.image || '';
+              if (imageUrl && imageUrl.startsWith('/')) {
+                imageUrl = `http://localhost:8080${imageUrl}`;
+              }
+              
+              return {
+                id: creation.id || creation.ID,
+                title: creation.title || creation.Title,
+                description: creation.description || creation.Description,
+                image: imageUrl,
+                contentHash: creation.content_hash || creation.ContentHash,
+                creator: creation.creator_address || creation.CreatorAddress,
+                price: creation.price_in_points || creation.PriceInPoints || 0,
+                createdAt: creation.created_at || creation.CreatedAt,
+              };
+            });
+            setCreations(formattedCreations);
+          } else {
+            setCreations([]);
+          }
+        } catch (apiError) {
+          console.error('获取作品列表失败:', apiError);
+          setCreations([]);
+        }
 
       } catch (err) {
         setError('Failed to load profile data.');
-        // 错误处理
+        console.error('加载个人资料失败:', err);
       } finally {
         setIsLoading(false);
       }
