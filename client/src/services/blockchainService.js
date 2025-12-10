@@ -18,8 +18,8 @@ const CONTRACT_ADDRESSES = {
   11155111: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Sepolia 测试网
   137: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Polygon 主网
   80001: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Polygon Mumbai 测试网
-  1337: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Hardhat 本地网络 - SimpleCreationRegistry 合约地址
-  5777: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Ganache 本地网络 - SimpleCreationRegistry 合约地址
+  1337: '0x4eE3b375298a3A2FD010201D40542BE548D5C010', // Hardhat 本地网络 - SimpleCreationRegistry 合约地址（本地部署）
+  5777: '0x4eE3b375298a3A2FD010201D40542BE548D5C010', // Ganache 本地网络 - SimpleCreationRegistry 合约地址（本地部署）
 };
 
 // 获取有效的合约地址（自动校验和格式化）

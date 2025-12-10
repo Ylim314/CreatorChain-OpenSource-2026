@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="220" height="220" role="img" aria-label="Web3 purple orbit logo">
+  <defs>
+    <linearGradient id="gp" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#5B21B6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0" stop-color="#C084FC" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#3B0764" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="220" height="220" rx="32" fill="#0F0A1F"/>
+  <circle cx="110" cy="110" r="78" fill="url(#glow)"/>
+  <circle cx="110" cy="110" r="64" fill="none" stroke="url(#gp)" stroke-width="8" stroke-dasharray="18 10" stroke-linecap="round"/>
+  <circle cx="110" cy="110" r="44" fill="url(#gp)" opacity="0.18"/>
+  <circle cx="110" cy="110" r="20" fill="url(#gp)"/>
+  <g fill="url(#gp)" opacity="0.96">
+    <circle cx="48" cy="92" r="8"/>
+    <circle cx="72" cy="154" r="7"/>
+    <circle cx="154" cy="64" r="9"/>
+    <circle cx="170" cy="142" r="7.5"/>
+  </g>
+  <g stroke="#C084FC" stroke-width="3" stroke-linecap="round" opacity="0.85" fill="none">
+    <path d="M48 92 Q90 50 154 64"/>
+    <path d="M72 154 Q100 180 170 142"/>
+    <path d="M48 92 Q92 120 72 154"/>
+    <path d="M154 64 Q140 120 170 142"/>
+  </g>
+</svg>
+

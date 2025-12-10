@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Web3 hex chain logo">
+  <defs>
+    <linearGradient id="gA" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#00B4FF"/>
+      <stop offset="1" stop-color="#0A74FF"/>
+    </linearGradient>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feBlend in="SourceGraphic" in2="b"/>
+    </filter>
+  </defs>
+  <g transform="translate(100,100)" filter="url(#s)">
+    <g transform="translate(-56,-48)">
+      <polygon points="56,0 104,28 104,84 56,112 8,84 8,28" fill="url(#gA)"/>
+    </g>
+    <g transform="translate(-22,-82) scale(0.55)">
+      <polygon points="56,0 104,28 104,84 56,112 8,84 8,28" fill="#1EA0FF" opacity="0.95"/>
+    </g>
+    <g transform="translate(46,-10) scale(0.6)">
+      <polygon points="56,0 104,28 104,84 56,112 8,84 8,28" fill="#0777E6" opacity="0.95"/>
+    </g>
+    <g transform="translate(6,56) scale(0.5)">
+      <polygon points="56,0 104,28 104,84 56,112 8,84 8,28" fill="#0A6FE6" opacity="0.9"/>
+    </g>
+  </g>
+</svg>
+

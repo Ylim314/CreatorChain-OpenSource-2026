@@ -1,5 +1,42 @@
 # CreatorChain Backend
 
+> 新增：补充清晰的后端项目结构，便于快速定位模块。
+
+## 📁 项目结构（Backend）
+
+```
+backend/
+├─ cmd/
+│  └─ api/
+│     └─ main.go                   # 应用入口
+├─ internal/                       # 业务模块
+│  ├─ api/                         # HTTP 处理
+│  ├─ ai/                          # AI 引擎/模型集成
+│  ├─ analysis/                    # 贡献度/风控分析
+│  ├─ blockchain/                  # 链上交互客户端
+│  ├─ ipfs/                        # IPFS/Pinata 集成
+│  ├─ monitoring/                  # 监控与日志
+│  ├─ repository/                  # 数据访问与模型
+│  ├─ security/                    # 安全与权限
+│  ├─ service/                     # 核心业务逻辑
+│  └─ zkp/                         # 零知识证明
+├─ pkg/
+│  └─ utils/                       # 公共工具与配置
+├─ scripts/                        # 辅助脚本
+├─ uploads/                        # 本地上传目录
+├─ docker-compose.yml
+├─ Dockerfile
+├─ go.mod / go.sum
+├─ start_backend.bat               # Windows 一键启动
+└─ README.md
+```
+
+### 常用命令
+- 依赖：`cd backend && go mod tidy`
+- 运行：`go run cmd/api/main.go`
+- 编译：`go build -o bin/creatorchain cmd/api/main.go`
+- 测试：`go test ./...`
+
 基于 Go 的 CreatorChain 区块链创作平台后端服务，集成 AI 引擎、零知识证明和分布式存储。
 
 ## 🚀 快速开始

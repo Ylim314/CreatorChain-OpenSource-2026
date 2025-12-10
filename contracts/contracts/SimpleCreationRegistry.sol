@@ -28,11 +28,11 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         uint256 timestamp;     // 初次登记时的区块时间，作为时间戳证据
     }
 
-    // 通过作品 ID 查询对应的 Creation 详情
+    // 通过作品 ID 查询对应的 Creation 详情（相当于链上的「作品表」）
     mapping(uint256 => Creation) public creations;
-    // 通过创作者地址查询他名下所有作品 ID
+    // 通过创作者地址查询他名下所有作品 ID（方便做个人作品列表）
     mapping(address => uint256[]) public creatorToCreations;
-    // 自增计数器，用来生成新的作品 ID
+    // 自增计数器，用来生成新的作品 ID（每次登记+1，就像排号）
     uint256 private _creationCounter;
 
     event CreationRegistered(
@@ -76,11 +76,11 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         uint256 _creationType,
         bytes32 _contentHash
     ) public returns (uint256) {
-        // 1. 分配新的作品 ID（自增计数器）
+        // 1. 分配新的作品 ID（自增计数器，类似给作品排号）
         _creationCounter++;
         uint256 creationId = _creationCounter;
 
-        // 2. 在映射中初始化 Creation 结构体
+        // 2. 在映射中初始化 Creation 结构体（把核心信息一次性写入链上）
         Creation storage creation = creations[creationId];
         creation.id = creationId;
         creation.creator = msg.sender;
@@ -92,13 +92,13 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         creation.confirmed = false;
         creation.timestamp = block.timestamp;
 
-        // 3. 记录「某个地址名下有哪些作品」
+        // 3. 记录「某个地址名下有哪些作品」（方便前端直接查列表）
         creatorToCreations[msg.sender].push(creationId);
 
         // 4. 触发事件，方便前端订阅与索引
         emit CreationRegistered(creationId, msg.sender, _title, _ipfsHash);
 
-        // 5. 将作品 ID 返回给前端，后续用于 confirmCreation / 数据库记录
+        // 5. 把作品 ID 返回给前端，后面确认或查询都靠这个编号
         return creationId;
     }
 
@@ -117,10 +117,10 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         string memory _finalIpfsHash,
         bytes32 _finalContentHash
     ) public {
-        // 安全检查：只有最初登记该作品的地址可以做最终确认
+        // 安全检查：只有最初登记该作品的地址可以做最终确认（防止别人乱改）
         require(creations[_creationId].creator == msg.sender, "Not the creator");
 
-        // 更新作品的最终哈希信息，并标记为已确认
+        // 更新作品的最终哈希信息，并标记为已确认（完成双重确权）
         Creation storage creation = creations[_creationId];
         creation.ipfsHash = _finalIpfsHash;
         creation.contentHash = _finalContentHash;

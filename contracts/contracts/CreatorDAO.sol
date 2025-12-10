@@ -27,12 +27,12 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  */
 contract CreatorDAO is AccessControl, ReentrancyGuard {
     
-    // ============ 角色定义 ============
+    // ============ 角色定义（谁能发起/执行/取消提案） ============
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
     bytes32 public constant CANCELLER_ROLE = keccak256("CANCELLER_ROLE");
     
-    // ============ 提案状态 ============
+    // ============ 提案状态（提案走到哪一步了） ============
     enum ProposalState {
         Pending,        // 待投票
         Active,         // 投票中
@@ -44,7 +44,7 @@ contract CreatorDAO is AccessControl, ReentrancyGuard {
         Executed        // 已执行
     }
     
-    // ============ 提案类型 ============
+    // ============ 提案类型（提案是改参数还是其他目的） ============
     enum ProposalType {
         General,        // 通用提案
         ParameterChange,// 参数修改
@@ -53,7 +53,7 @@ contract CreatorDAO is AccessControl, ReentrancyGuard {
         Emergency       // 紧急提案
     }
     
-    // ============ 提案结构 ============
+    // ============ 提案结构（把提案的关键信息集中在这里） ============
     struct Proposal {
         uint256 id;
         address proposer;

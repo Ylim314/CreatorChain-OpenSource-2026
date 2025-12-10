@@ -468,12 +468,12 @@ export const Web3Provider = ({ children }) => {
       const localNetworks = {
         1337: {
           chainId: '0x539', // 1337 in hex
-          chainName: 'Hardhat Local',
-          rpcUrls: ['http://127.0.0.1:8545']
+          chainName: 'Ganache Local (1337)',
+          rpcUrls: ['http://127.0.0.1:7545'] // Ganache 已配置 chainId 1337，端口 7545
         },
         5777: {
           chainId: '0x1691', // 5777 in hex
-          chainName: 'Ganache Local',
+          chainName: 'Ganache Local (5777 fallback)',
           rpcUrls: ['http://127.0.0.1:7545']
         }
       };
@@ -735,12 +735,12 @@ export const Web3Provider = ({ children }) => {
       const localNetworks = {
         1337: {
           chainId: '0x539',
-          chainName: 'Hardhat Local',
-          rpcUrls: ['http://127.0.0.1:8545']
+          chainName: 'Ganache Local (1337)',
+          rpcUrls: ['http://127.0.0.1:7545'] // Ganache 使用 chainId 1337
         },
         5777: {
           chainId: '0x1691',
-          chainName: 'Ganache Local',
+          chainName: 'Ganache Local (5777 fallback)',
           rpcUrls: ['http://127.0.0.1:7545']
         }
       };

@@ -26,11 +26,11 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  */
 contract LicenseManager is AccessControl, ReentrancyGuard {
     
-    // ============ 角色定义 ============
+    // ============ 角色定义（谁能管授权） ============
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     
-    // ============ 授权类型 ============
+    // ============ 授权类型（授权用途是什么） ============
     enum LicenseType {
         Personal,       // 个人使用 - 非商业
         Commercial,     // 商业使用 - 标准授权
@@ -38,7 +38,7 @@ contract LicenseManager is AccessControl, ReentrancyGuard {
         OpenSource      // 开源授权 - CC协议
     }
     
-    // ============ 授权状态 ============
+    // ============ 授权状态（授权现在的状态） ============
     enum LicenseStatus {
         Active,         // 有效
         Expired,        // 已过期
@@ -46,7 +46,7 @@ contract LicenseManager is AccessControl, ReentrancyGuard {
         Transferred     // 已转让
     }
     
-    // ============ 授权信息结构 ============
+    // ============ 授权信息结构（记录一份授权的所有字段） ============
     struct License {
         uint256 licenseId;
         uint256 tokenId;           // NFT Token ID（仅作为版权证明）

@@ -1,9 +1,9 @@
 {
-  "SimpleCreationRegistry": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "SimpleCreationRegistry": "0x4eE3b375298a3A2FD010201D40542BE548D5C010",
   "network": {
-    "name": "localhost",
+    "name": "ganache",
     "chainId": "1337"
   },
-  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "timestamp": "2025-09-16T00:19:18.187Z"
+  "deployer": "0xA82Ff6d90261b0A17A5d0a9060b1139185751a12",
+  "timestamp": "2025-12-10T07:30:51.525Z"
 }

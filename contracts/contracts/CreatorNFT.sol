@@ -32,11 +32,11 @@ contract CreatorNFT is
     AccessControl, 
     ReentrancyGuard 
 {
-    // ============ 角色定义 ============
+    // ============ 角色定义（谁能做什么） ============
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
     
-    // ============ 创作状态 ============
+    // ============ 创作状态（作品处在什么阶段） ============
     enum CreationStage {
         ProcessRecorded,    // 过程已记录（第一次确权）
         FinalConfirmed,     // 最终已确认（第二次确权）
@@ -45,7 +45,7 @@ contract CreatorNFT is
         Transferred         // 已转移
     }
     
-    // ============ 创作信息结构 ============
+    // ============ 创作信息结构（把一件作品的关键字段都放在一起） ============
     struct CreationInfo {
         uint256 tokenId;
         address originalCreator;     // 原始创作者
@@ -72,12 +72,12 @@ contract CreatorNFT is
     }
     
     // ============ 存储 ============
-    mapping(uint256 => CreationInfo) public creationInfos;
-    mapping(bytes32 => uint256) public contentHashToTokenId;  // 防止重复注册
-    mapping(address => uint256[]) private _creatorTokens;     // 创作者的所有作品
+    mapping(uint256 => CreationInfo) public creationInfos;        // tokenId => 作品详情
+    mapping(bytes32 => uint256) public contentHashToTokenId;      // 用内容哈希去重，防止重复登记
+    mapping(address => uint256[]) private _creatorTokens;         // 记录某个创作者名下有哪些 tokenId
     
-    uint256 private _tokenIdCounter;
-    uint256 public defaultRoyaltyBps = 500;  // 默认版税 5%
+    uint256 private _tokenIdCounter;          // 自增计数器，分配新的 tokenId
+    uint256 public defaultRoyaltyBps = 500;   // 默认版税 5%（500/10000）
     
     // ============ 事件 ============
     event ProcessRecorded(
@@ -143,15 +143,16 @@ contract CreatorNFT is
         string memory description,
         uint256 creationType
     ) external returns (uint256) {
+        // 做一些简单校验，避免空值或重复登记
         require(bytes(processIpfsHash).length > 0, "Process IPFS hash required");
         require(processContentHash != bytes32(0), "Process content hash required");
         require(bytes(title).length > 0, "Title required");
         require(contentHashToTokenId[processContentHash] == 0, "Content already registered");
         
-        _tokenIdCounter++;
+        _tokenIdCounter++; // 分配新的 tokenId（类似排号）
         uint256 tokenId = _tokenIdCounter;
         
-        CreationInfo storage info = creationInfos[tokenId];
+        CreationInfo storage info = creationInfos[tokenId]; // 把信息写入链上存储
         info.tokenId = tokenId;
         info.originalCreator = msg.sender;
         info.currentOwner = msg.sender;
@@ -163,8 +164,8 @@ contract CreatorNFT is
         info.creationType = creationType;
         info.stage = CreationStage.ProcessRecorded;
         
-        contentHashToTokenId[processContentHash] = tokenId;
-        _creatorTokens[msg.sender].push(tokenId);
+        contentHashToTokenId[processContentHash] = tokenId; // 记录哈希对应的作品，避免重复
+        _creatorTokens[msg.sender].push(tokenId);          // 记下「这个人有哪些作品」
         
         emit ProcessRecorded(
             tokenId, 
@@ -199,7 +200,7 @@ contract CreatorNFT is
         require(finalContentHash != bytes32(0), "Final content hash required");
         require(contributionScore <= 1000, "Score must be 0-1000");
         
-        // 防止最终哈希重复
+        // 防止最终哈希重复（同一内容只能算一份）
         require(
             contentHashToTokenId[finalContentHash] == 0 || 
             contentHashToTokenId[finalContentHash] == tokenId,
@@ -210,9 +211,9 @@ contract CreatorNFT is
         info.finalContentHash = finalContentHash;
         info.confirmTimestamp = block.timestamp;
         info.contributionScore = contributionScore;
-        info.stage = CreationStage.FinalConfirmed;
+        info.stage = CreationStage.FinalConfirmed; // 阶段推进到「已确认」
         
-        contentHashToTokenId[finalContentHash] = tokenId;
+        contentHashToTokenId[finalContentHash] = tokenId; // 也记录最终哈希，便于防伪
         
         emit FinalConfirmed(
             tokenId,
@@ -240,7 +241,7 @@ contract CreatorNFT is
         require(info.stage == CreationStage.FinalConfirmed, "Not confirmed yet");
         require(bytes(metadataURI).length > 0, "Metadata URI required");
         
-        // 铸造NFT
+        // 铸造NFT（把确权过的作品变成可流转的 NFT）
         _safeMint(msg.sender, tokenId);
         _setTokenURI(tokenId, metadataURI);
         
@@ -261,7 +262,7 @@ contract CreatorNFT is
      */
     function updateRoyalty(uint256 tokenId, uint96 newRoyaltyBps) external {
         require(creationInfos[tokenId].originalCreator == msg.sender, "Not original creator");
-        require(newRoyaltyBps <= 2000, "Royalty too high (max 20%)");
+        require(newRoyaltyBps <= 2000, "Royalty too high (max 20%)"); // 防止填写过高
         
         _setTokenRoyalty(tokenId, msg.sender, newRoyaltyBps);
         emit RoyaltyUpdated(tokenId, msg.sender, newRoyaltyBps);
