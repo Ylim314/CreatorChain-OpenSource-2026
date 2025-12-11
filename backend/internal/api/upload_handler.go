@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,15 +25,21 @@ func NewUploadHandler() *UploadHandler {
 
 // UploadImage 上传图片文件
 func (h *UploadHandler) UploadImage(c *gin.Context) {
+	log.Printf("📤 UploadImage 请求: ContentType=%s", c.ContentType())
+
 	// 获取上传的文件
 	file, err := c.FormFile("file")
 	if err != nil {
+		log.Printf("❌ UploadImage 获取文件失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "No file uploaded: " + err.Error(),
 		})
 		return
 	}
+
+	log.Printf("✅ UploadImage 文件信息: name=%s, size=%d, type=%s",
+		file.Filename, file.Size, file.Header.Get("Content-Type"))
 
 	// 验证文件类型
 	if !isValidImageType(file.Header.Get("Content-Type")) {
@@ -209,22 +216,22 @@ func (h *UploadHandler) UploadAudio(c *gin.Context) {
 // isValidAudioType 验证音频类型
 func isValidAudioType(contentType string) bool {
 	validTypes := []string{
-		"audio/mpeg",      // .mp3
-		"audio/mp3",       // .mp3 (某些浏览器)
-		"audio/wav",       // .wav
-		"audio/wave",      // .wav (某些浏览器)
-		"audio/x-wav",    // .wav (某些浏览器)
-		"audio/ogg",       // .ogg
-		"audio/opus",     // .opus
-		"audio/mp4",       // .m4a (iOS/Android录音)
-		"audio/x-m4a",    // .m4a (某些浏览器)
-		"audio/aac",       // .aac
-		"audio/aacp",      // .aac (某些浏览器)
-		"audio/3gpp",      // .3gp (Android录音)
-		"audio/amr",       // .amr (Android录音)
-		"audio/x-caf",     // .caf (iOS录音)
-		"audio/flac",      // .flac
-		"audio/webm",      // .webm
+		"audio/mpeg",  // .mp3
+		"audio/mp3",   // .mp3 (某些浏览器)
+		"audio/wav",   // .wav
+		"audio/wave",  // .wav (某些浏览器)
+		"audio/x-wav", // .wav (某些浏览器)
+		"audio/ogg",   // .ogg
+		"audio/opus",  // .opus
+		"audio/mp4",   // .m4a (iOS/Android录音)
+		"audio/x-m4a", // .m4a (某些浏览器)
+		"audio/aac",   // .aac
+		"audio/aacp",  // .aac (某些浏览器)
+		"audio/3gpp",  // .3gp (Android录音)
+		"audio/amr",   // .amr (Android录音)
+		"audio/x-caf", // .caf (iOS录音)
+		"audio/flac",  // .flac
+		"audio/webm",  // .webm
 	}
 
 	for _, validType := range validTypes {

@@ -59,7 +59,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		message := c.GetHeader("Message")
 		timestamp := c.GetHeader("Timestamp")
 		messageEncoding := c.GetHeader("Message-Encoding")
-		
+
 		// 如果 Message 是 base64 编码的，需要解码
 		if messageEncoding == "base64" && message != "" {
 			decoded, err := base64.StdEncoding.DecodeString(message)
@@ -74,11 +74,12 @@ func AuthMiddleware() gin.HandlerFunc {
 			message = string(decoded)
 		}
 
-		// 先检查必须的头信息，之前没检查这个导致很多问题
-		if userAddress == "" || signature == "" || message == "" || timestamp == "" {
+		// 先检查必须的头信息
+		// 注意：Message可以为空，因为我们可以从userAddress和timestamp重建它
+		if userAddress == "" || signature == "" || timestamp == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "Unauthorized",
-				"message": "Missing required authentication headers",
+				"message": "Missing required authentication headers (User-Address, Signature, Timestamp)",
 			})
 			c.Abort()
 			return
@@ -102,6 +103,14 @@ func AuthMiddleware() gin.HandlerFunc {
 			})
 			c.Abort()
 			return
+		}
+
+		// 如果Message为空或被清理了（只有单行），重新构建标准格式的Message
+		// 这样可以支持前端发送清理过的Message（移除了换行符以避免HTTP 400错误）
+		expectedMessage := security.BuildSignedMessage(userAddress, timestamp)
+		if message == "" || !strings.Contains(message, "\n") {
+			// Message被清理了或者为空，使用重建的标准格式
+			message = expectedMessage
 		}
 
 		if err := security.ValidateSignedMessage(userAddress, timestamp, message); err != nil {

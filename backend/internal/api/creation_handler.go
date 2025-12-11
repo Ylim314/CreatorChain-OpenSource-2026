@@ -68,6 +68,7 @@ type CreateCreationRequest struct {
 func (h *CreationHandler) CreateCreation(c *gin.Context) {
 	var req CreateCreationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("❌ CreateCreation JSON绑定失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format: " + err.Error()})
 		return
 	}
@@ -75,9 +76,13 @@ func (h *CreationHandler) CreateCreation(c *gin.Context) {
 	// 验证创作者地址
 	creatorAddress := c.GetHeader("User-Address")
 	if creatorAddress == "" {
+		log.Printf("❌ CreateCreation 缺少User-Address header")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing User-Address header"})
 		return
 	}
+
+	log.Printf("✅ CreateCreation 请求: creator=%s, title=%s, contentHash=%s",
+		creatorAddress, req.Title, req.ContentHash)
 
 	// ??????
 	if err := validateCreationInput(&req); err != nil {
@@ -199,9 +204,11 @@ func (h *CreationHandler) UpdateCreation(c *gin.Context) {
 	}
 
 	var req struct {
+		TokenID         *int64  `json:"token_id"` // 区块链token ID
 		Title           string  `json:"title"`
 		Description     string  `json:"description"`
 		Visibility      *string `json:"visibility"`
+		MetadataHash    string  `json:"metadata_hash"` // IPFS元数据哈希
 		AIModel         string  `json:"ai_model"`
 		PromptText      string  `json:"prompt_text"`
 		PriceInPoints   *int64  `json:"price_in_points"`  // 使用指针，允许设置为0
@@ -224,17 +231,23 @@ func (h *CreationHandler) UpdateCreation(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing User-Address header"})
 		return
 	}
-	if strings.ToLower(creation.CreatorAddress) != strings.ToLower(creatorAddress) {
+	if !strings.EqualFold(creation.CreatorAddress, creatorAddress) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own creations"})
 		return
 	}
 
 	// 更新作品信息
+	if req.TokenID != nil && *req.TokenID > 0 {
+		creation.TokenID = *req.TokenID
+	}
 	if req.Title != "" {
 		creation.Title = strings.TrimSpace(req.Title)
 	}
 	if req.Description != "" {
 		creation.Description = strings.TrimSpace(req.Description)
+	}
+	if req.MetadataHash != "" {
+		creation.MetadataHash = strings.TrimSpace(req.MetadataHash)
 	}
 	if req.AIModel != "" {
 		creation.AIModel = strings.TrimSpace(req.AIModel)
