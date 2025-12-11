@@ -27,7 +27,17 @@ import AIModelConfig from './pages/AIModelConfig';
 import ManualCreation from './pages/ManualCreation';
 import AIChat from './pages/AIChat';
 import ErrorInfo from './pages/ErrorInfo';
+import MetaMaskTest from './pages/MetaMaskTest';
+import { installMetaMaskErrorFilter } from './utils/metamaskErrorFilter';
 import './App.css';
+
+// 安装MetaMask错误过滤器（所有环境）
+installMetaMaskErrorFilter();
+
+// 开发环境下加载Web3调试工具
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/web3Debug').catch(err => console.warn('无法加载Web3调试工具:', err));
+}
 
 // 加载中组件
 const LoadingFallback = () => (
@@ -86,6 +96,13 @@ function App() {
           </>
         } />
         <Route path="/error-info" element={<ErrorInfo />} />
+        <Route path="/metamask-test" element={
+          <>
+            <Navbar />
+            <MetaMaskTest />
+            <Footer />
+          </>
+        } />
         <Route path="/create" element={
           <>
             <Navbar />

@@ -64,35 +64,52 @@ import Footer from '../components/Footer';
 // 安全的图片URL获取函数
 const getImageUrl = (creation) => {
   try {
-    // 检查所有可能的图片字段：image, image_url, fileHash
-    const possibleFields = ['image', 'image_url', 'fileHash', 'ipfsHash'];
+    // 优先使用 image_url 或 image（本地上传路径）
+    const imageUrl = creation?.image_url || creation?.image;
+    if (imageUrl && typeof imageUrl === 'string' && imageUrl.length > 0) {
+      // 本地上传路径
+      if (imageUrl.startsWith('/uploads/')) {
+        return `http://localhost:8080${imageUrl}`;
+      }
+      // 完整URL
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl;
+      }
+    }
     
-    for (const field of possibleFields) {
+    // 尝试IPFS哈希字段
+    const hashFields = ['fileHash', 'ipfsHash', 'content_hash', 'hash'];
+    for (const field of hashFields) {
       const value = creation?.[field];
       if (value && typeof value === 'string' && value.length > 0) {
-      // 检查是否为本地上传路径
+        // 本地上传路径格式
         if (value.startsWith('/uploads/')) {
           return `http://localhost:8080${value}`;
         }
-        // 已经是完整的后端URL
-        if (value.startsWith('http://localhost:8080')) {
-          return value;
-        }
-        // 完整的HTTP URL（外部图片）
-        if (value.startsWith('http://') || value.startsWith('https://')) {
-          return value;
-        }
-        // 检查是否为有效的IPFS哈希
-        if (value.startsWith('Qm') || value.startsWith('bafy')) {
+        // 有效的IPFS哈希
+        if ((value.startsWith('Qm') && value.length === 46) || value.startsWith('bafy')) {
           return makeGatewayURL(value);
         }
       }
     }
 
+    // 如果有 ID，尝试根据 ID 查找对应的本地图片（可能在不同字段中）
+    const creationId = creation?.id || creation?.token_id;
+    if (creationId) {
+      // 从所有字段中查找包含 uploads 的路径
+      const allFields = Object.values(creation || {});
+      for (const val of allFields) {
+        if (typeof val === 'string' && val.includes('/uploads/images/')) {
+          return `http://localhost:8080${val.startsWith('/') ? val : '/' + val}`;
+        }
+      }
+    }
+
     // 默认图片
+    console.warn('⚠️ 未找到有效图片URL，使用默认图片，作品:', creation?.title);
     return 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
   } catch (error) {
-    console.error('Error getting image URL for creation:', creation, error);
+    console.error('❌ 获取图片URL出错:', creation, error);
     return 'https://images.unsplash.com/photo-1546074177-ffdda98d214f?w=400&h=300&fit=crop';
   }
 };
@@ -316,8 +333,51 @@ const MyCreations = () => {
       let combinedCreations = [];
 
       // 1. 加载本地存储的创作
-      const localCreations = JSON.parse(localStorage.getItem('userCreations') || '[]');
-      console.log('本地创作数据:', localCreations);
+      let localCreations = JSON.parse(localStorage.getItem('userCreations') || '[]');
+      console.log('本地创作数据（加载前）:', localCreations.length);
+      console.log('本地创作详情:', localCreations.map(c => ({ 
+        id: c.id, 
+        token_id: c.token_id, 
+        title: c.title,
+        image: (c.image || c.image_url || '').substring(0, 50)
+      })));
+      
+      // 1.1 清理本地存储中的重复数据（使用多维度去重）
+      if (localCreations.length > 0) {
+        const localMap = new Map();
+        const usedKeys = new Set();
+        
+        localCreations.forEach(creation => {
+          // 生成多个可能的唯一标识
+          const keys = [];
+          const id = creation.id;
+          const tokenId = creation.token_id || creation.TokenID;
+          const title = (creation.title || '').trim().toLowerCase();
+          const imageUrl = creation.image || creation.image_url || '';
+          const hash = creation.fileHash || creation.content_hash || creation.hash || '';
+          
+          if (id) keys.push(`id_${id}`);
+          if (tokenId) keys.push(`token_${tokenId}`);
+          if (title && imageUrl) keys.push(`title_img_${title}_${imageUrl}`);
+          if (title && hash) keys.push(`title_hash_${title}_${hash}`);
+          
+          // 检查是否已存在
+          const isDuplicate = keys.some(key => usedKeys.has(key));
+          
+          if (!isDuplicate) {
+            const primaryKey = keys[0] || `temp_${Date.now()}_${Math.random()}`;
+            localMap.set(primaryKey, creation);
+            keys.forEach(key => usedKeys.add(key));
+          } else {
+            console.log('检测到重复作品:', creation.title, keys);
+          }
+        });
+        
+        localCreations = Array.from(localMap.values());
+        // 保存清理后的数据
+        localStorage.setItem('userCreations', JSON.stringify(localCreations));
+        console.log('本地创作数据（清理后）:', localCreations.length);
+      }
 
       // 2. 如果连接了钱包，尝试从后端 + 区块链加载
       if (connected && account) {
@@ -325,17 +385,19 @@ const MyCreations = () => {
           // 后端我的作品
           const backendResp = await apiService.getCreationsByCreator(account);
           const backendCreations = Array.isArray(backendResp?.creations) ? backendResp.creations : [];
+          console.log('后端返回作品数:', backendCreations.length);
           const formattedBackend = backendCreations.map((creation) => ({
             id: creation.id || creation.ID,
             token_id: creation.token_id || creation.TokenID,
             title: creation.title || creation.Title || '未命名作品',
             description: creation.description || creation.Description || '',
             image: creation.image_url || creation.ImageURL || creation.image || '',
+            image_url: creation.image_url || creation.ImageURL || creation.image || '',
             fileHash: creation.content_hash || creation.ContentHash,
             creationType: creation.creation_type || creation.CreationType || 'manual',
             status: creation.visibility === 'public' ? 'published' : 'draft',
             visibility: creation.visibility || 'public',
-            createdAt: creation.created_at || creation.CreatedAt || new Date().toISOString().split('T')[0],
+            createdAt: creation.created_at || creation.CreatedAt || creation.timestamp || new Date().toISOString(),
             views: 0,
             likes: 0,
             downloads: 0,
@@ -345,13 +407,40 @@ const MyCreations = () => {
             price_in_points: creation.price_in_points || creation.PriceInPoints || 0,
             license_duration: creation.license_duration || creation.LicenseDuration || 12,
             is_listed: creation.is_listed || creation.IsListed,
+            dataSource: 'backend' // 标记数据来源
           }));
 
           // 区块链数据（保持原有逻辑）
           await blockchainService.initialize();
           const blockchainCreations = await blockchainService.getUserCreations(account);
-          console.log('区块链创作数据:', blockchainCreations);
-          const formattedBlockchainCreations = blockchainCreations.map(creation => ({
+          console.log('区块链返回作品数:', blockchainCreations.length);
+          
+          // 过滤掉无效的区块链记录(没有title或ipfsHash包含unnamed)
+          const validBlockchainCreations = blockchainCreations.filter(creation => {
+            const hasTitle = creation.title && creation.title.trim();
+            const hasValidHash = creation.ipfsHash && 
+                                creation.ipfsHash.startsWith('Qm') && 
+                                creation.ipfsHash.length > 20 && 
+                                !creation.ipfsHash.toLowerCase().includes('unnamed');
+            
+            // 必须同时有title和有效的hash才保留
+            const shouldKeep = hasTitle && hasValidHash;
+            
+            if (!shouldKeep) {
+              console.log('🗑️ 过滤掉无效区块链记录:', {
+                title: creation.title,
+                ipfsHash: creation.ipfsHash,
+                hasTitle,
+                hasValidHash,
+                reason: !hasTitle ? '无标题' : '哈希无效'
+              });
+            }
+            
+            return shouldKeep;
+          });
+          console.log('过滤后区块链作品数:', validBlockchainCreations.length, '(原始:', blockchainCreations.length, ')');
+          
+          const formattedBlockchainCreations = validBlockchainCreations.map(creation => ({
             id: creation.id,
             title: creation.title || '区块链创作',
             description: creation.description || '从区块链加载的创作',
@@ -365,10 +454,54 @@ const MyCreations = () => {
             likes: 0,
             downloads: 0,
             blockchainVerified: true,
-            hash: creation.contentHash
+            hash: creation.contentHash,
+            dataSource: 'blockchain' // 标记数据来源
           }));
 
-          combinedCreations = [...formattedBackend, ...formattedBlockchainCreations, ...localCreations];
+          // 标记localStorage数据来源
+          localCreations.forEach(c => c.dataSource = 'localStorage');
+
+          // 立即合并并去重，不等到后面
+          const allSources = [...formattedBackend, ...formattedBlockchainCreations, ...localCreations];
+          console.log('合并前总数:', allSources.length, '(后端:', formattedBackend.length, '+区块链:', formattedBlockchainCreations.length, '+本地:', localCreations.length, ')');
+          
+          // 立即去重
+          const quickDedupMap = new Map();
+          allSources.forEach(c => {
+            const title = (c.title || '').trim();
+            const id = c.id;
+            const tokenId = c.token_id;
+            const hash = c.hash || c.fileHash || c.content_hash;
+            const imageUrl = c.image || c.image_url;
+            
+            // 使用多个key尝试匹配
+            const possibleKeys = [
+              id ? `id_${id}` : null,
+              tokenId ? `token_${tokenId}` : null,
+              hash ? `hash_${hash}` : null,
+              title ? `title_${title.toLowerCase()}` : null,
+              (title && imageUrl) ? `title_image_${title.toLowerCase()}_${imageUrl}` : null
+            ].filter(Boolean);
+            
+            let found = false;
+            let existingItem = null;
+            for (const key of possibleKeys) {
+              if (quickDedupMap.has(key)) {
+                found = true;
+                existingItem = quickDedupMap.get(key);
+                console.log('跳过重复:', c.title || '无标题', '来源:', c.dataSource, 'key:', key, '已存在来源:', existingItem?.dataSource);
+                break;
+              }
+            }
+            
+            if (!found && possibleKeys.length > 0) {
+              quickDedupMap.set(possibleKeys[0], c);
+              possibleKeys.forEach(k => quickDedupMap.set(k, c));
+            }
+          });
+          
+          combinedCreations = Array.from(new Set(quickDedupMap.values()));
+          console.log('快速去重后:', combinedCreations.length);
         } catch (error) {
           console.warn('从后端或区块链加载数据失败:', error);
           combinedCreations = localCreations;
@@ -455,15 +588,110 @@ const MyCreations = () => {
       const finalCreationsRaw = combinedCreations.length > 0
         ? combinedCreations
         : mockCreations;
-      const seen = new Set();
-      const finalCreations = [];
+
+      const normalizeHash = (val) => {
+        if (!val || typeof val !== 'string') return '';
+        let v = val.trim();
+        // 去掉网关前缀或本地前缀，留下核心哈希/路径尾部
+        v = v.replace('http://localhost:8080', '');
+        v = v.replace(/^https?:\/\/[^/]+\/ipfs\//, '');
+        // 如果是路径，取末尾文件名
+        if (v.includes('/')) {
+          const parts = v.split('/');
+          v = parts[parts.length - 1];
+        }
+        return v;
+      };
+
+      // 改进的去重逻辑：使用多维度特征识别同一作品
+      const dedupedMap = new Map();
+      
+      // 为每个作品生成多个可能的唯一标识
+      const generateKeys = (c) => {
+        const keys = [];
+        const dbId = c.id ? Number(c.id) : null;
+        const tokenId = c.token_id || c.TokenID;
+        const hashKey = normalizeHash(c.content_hash || c.ContentHash || c.hash || c.fileHash || c.ipfsHash);
+        const title = (c.title || '').trim().toLowerCase();
+        const imageKey = normalizeHash(c.image || c.image_url || '');
+        
+        // 生成多个可能的key
+        if (dbId && dbId > 0) keys.push(`db_${dbId}`);
+        if (tokenId) keys.push(`token_${tokenId}`);
+        if (hashKey) keys.push(`hash_${hashKey}`);
+        // 使用标题+图片作为去重依据（捕获标题相同的作品）
+        if (title && imageKey) keys.push(`title_image_${title}_${imageKey}`);
+        if (title && hashKey) keys.push(`title_hash_${title}_${hashKey}`);
+        // 如果只有标题，也作为一个弱匹配
+        if (title && title !== '未命名作品' && title.length > 3) keys.push(`title_${title}`);
+        
+        return keys;
+      };
+      
+      // 跟踪所有已使用的key
+      const usedKeys = new Set();
+      
       for (const c of finalCreationsRaw) {
-        const k = `${c.id}-${c.hash || c.fileHash || c.createdAt || c.title || ''}`;
-        if (!seen.has(k)) {
-          seen.add(k);
-          finalCreations.push(c);
+        // 计算数据完整度分数（用于选择最优版本）
+        const completenessScore = [
+          c.image || c.image_url,
+          c.title && c.title !== '未命名作品',
+          c.description,
+          c.fileHash || c.content_hash || c.hash,
+          c.creationType,
+          c.category
+        ].filter(Boolean).length;
+        
+        const keys = generateKeys(c);
+        
+        // 检查是否已存在（任何一个key匹配就认为是重复）
+        let existingKey = null;
+        for (const key of keys) {
+          if (usedKeys.has(key)) {
+            existingKey = key;
+            break;
+          }
+        }
+        
+        if (existingKey) {
+          // 找到重复，比较完整度
+          console.log('发现重复作品:', c.title, '匹配key:', existingKey, 'keys:', keys);
+          const existing = dedupedMap.get(existingKey);
+          if (existing && completenessScore > existing.score) {
+            console.log('→ 保留新版本（更完整）, 分数:', completenessScore, 'vs', existing.score);
+            // 新版本更完整，替换旧版本
+            dedupedMap.set(existingKey, { creation: c, score: completenessScore });
+          } else if (existing) {
+            console.log('→ 保留旧版本（更完整）, 分数:', existing.score, 'vs', completenessScore);
+          } else {
+            // existing 为 undefined，说明 key 在 usedKeys 中但不在 dedupedMap 中（不应该发生）
+            console.warn('数据不一致，重新添加作品:', c.title);
+            dedupedMap.set(existingKey, { creation: c, score: completenessScore });
+          }
+        } else {
+          // 新作品，使用第一个有效key
+          const primaryKey = keys[0] || `random_${Date.now()}_${Math.random()}`;
+          dedupedMap.set(primaryKey, { creation: c, score: completenessScore });
+          // 记录所有key，防止重复
+          keys.forEach(key => usedKeys.add(key));
         }
       }
+
+      const finalCreations = Array.from(dedupedMap.values()).map(entry => entry.creation);
+      
+      // 调试日志：显示去重结果
+      console.log('去重前作品数:', finalCreationsRaw.length);
+      console.log('去重后作品数:', finalCreations.length);
+      if (finalCreationsRaw.length !== finalCreations.length) {
+        console.log(`已去除 ${finalCreationsRaw.length - finalCreations.length} 个重复作品`);
+      }
+
+      // 排序：按创建时间倒序，无法解析的放最后
+      const toDate = (value) => {
+        const d = new Date(value || 0);
+        return isNaN(d.getTime()) ? new Date(0) : d;
+      };
+      finalCreations.sort((a, b) => toDate(b.createdAt) - toDate(a.createdAt));
 
       setCreations(finalCreations);
       setFilteredCreations(finalCreations);

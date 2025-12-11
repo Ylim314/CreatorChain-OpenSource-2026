@@ -237,9 +237,23 @@ export const Web3Provider = ({ children }) => {
   const initializeWeb3Connection = useCallback(async (address, options = {}) => {
     const { skipAuth = false } = options;
     try {
+      // 验证window.ethereum是否存在
+      if (typeof window.ethereum === 'undefined') {
+        throw new Error('未检测到MetaMask，请安装MetaMask扩展程序');
+      }
+
       const BrowserProvider = safeEthers.getBrowserProvider();
       const ethersProvider = new BrowserProvider(window.ethereum);
-      const ethersSigner = await ethersProvider.getSigner();
+      
+      // 获取signer前先验证连接
+      let ethersSigner;
+      try {
+        ethersSigner = await ethersProvider.getSigner();
+      } catch (signerError) {
+        console.error('获取signer失败:', signerError);
+        throw new Error('无法获取钱包签名者，请确保MetaMask已解锁');
+      }
+      
       const network = await ethersProvider.getNetwork();
       const numericChainId = Number(network.chainId);
 
@@ -442,10 +456,13 @@ export const Web3Provider = ({ children }) => {
     };
   }, [updateFavoritesCount]);
 
-  // 连接钱包 - 简化版本
+  // 连接钱包 - 优化版本
   const connectWallet = async () => {
     if (isConnecting || isLoading) {
-      toast('钱包连接正在进行中，请等待...');
+      toast('钱包连接正在进行中，请等待...', {
+        icon: '⏳',
+        duration: 2000,
+      });
       return;
     }
 
@@ -454,117 +471,173 @@ export const Web3Provider = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
+      console.log('🔌 开始连接钱包...');
+      
+      // 显示即时反馈
+      toast.loading('正在连接钱包...', {
+        id: 'wallet-connecting',
+        duration: 15000,
+      });
+
       // 检查MetaMask
       if (typeof window.ethereum === 'undefined') {
-        throw new Error('请安装MetaMask钱包扩展程序');
+        const error = new Error('请安装MetaMask钱包扩展程序');
+        console.error('❌', error.message);
+        throw error;
       }
 
-      // 配置本地开发网络（支持 Hardhat 1337 和 Ganache 5777）
-      // 首先检查当前网络，然后尝试添加/切换到本地网络
+      // 检查是否真的是MetaMask
+      if (!window.ethereum.isMetaMask) {
+        console.warn('⚠️ 检测到的provider不是MetaMask');
+      }
+
+      // 检查MetaMask是否已解锁
+      try {
+        const isUnlocked = await window.ethereum._metamask?.isUnlocked?.();
+        console.log('🔓 MetaMask解锁状态:', isUnlocked);
+        if (isUnlocked === false) {
+          throw new Error('请先解锁MetaMask钱包');
+        }
+      } catch (unlockCheckError) {
+        console.warn('⚠️ 无法检查MetaMask锁定状态:', unlockCheckError);
+        // 继续执行，让后续的请求来检测
+      }
+
+      // 检查当前网络（不自动切换，避免阻塞）
       const currentChainId = window.ethereum.chainId || `0x${Number(window.ethereum.networkVersion || 0).toString(16)}`;
       const currentChainIdNum = parseInt(currentChainId, 16);
       
-      // 定义支持的本地网络配置
-      const localNetworks = {
-        1337: {
-          chainId: '0x539', // 1337 in hex
-          chainName: 'Ganache Local (1337)',
-          rpcUrls: ['http://127.0.0.1:7545'] // Ganache 已配置 chainId 1337，端口 7545
-        },
-        5777: {
-          chainId: '0x1691', // 5777 in hex
-          chainName: 'Ganache Local (5777 fallback)',
-          rpcUrls: ['http://127.0.0.1:7545']
-        }
-      };
-
-      // 如果当前不在本地网络，尝试添加/切换
-      if (currentChainIdNum !== 1337 && currentChainIdNum !== 5777) {
-        // 优先尝试 Ganache (5777)，如果失败则尝试 Hardhat (1337)
-        const targetNetwork = localNetworks[5777]; // 默认使用 Ganache
-        
-        try {
-          // 先尝试切换到 Ganache
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: targetNetwork.chainId }],
-          });
-        } catch (switchError) {
-          // 如果网络不存在，添加网络
-          if (switchError.code === 4902) {
-            try {
-              const networkConfig = {
-                chainId: targetNetwork.chainId,
-                chainName: targetNetwork.chainName,
-                nativeCurrency: {
-                  name: 'Ethereum',
-                  symbol: 'ETH',
-                  decimals: 18
-                },
-                rpcUrls: targetNetwork.rpcUrls,
-                blockExplorerUrls: null
-              };
-              
-              await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [networkConfig],
-              });
-            } catch (addError) {
-              console.error('添加本地网络失败:', addError);
-              // 如果 Ganache 失败，尝试 Hardhat
-              if (targetNetwork.chainId === localNetworks[5777].chainId) {
-                try {
-                  const hardhatConfig = {
-                    chainId: localNetworks[1337].chainId,
-                    chainName: localNetworks[1337].chainName,
-                    nativeCurrency: {
-                      name: 'Ethereum',
-                      symbol: 'ETH',
-                      decimals: 18
-                    },
-                    rpcUrls: localNetworks[1337].rpcUrls,
-                    blockExplorerUrls: null
-                  };
-                  await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [hardhatConfig],
-                  });
-                } catch (hardhatError) {
-                  console.error('添加 Hardhat 网络也失败:', hardhatError);
-                }
-              }
-            }
-          } else {
-            console.error('切换网络失败:', switchError);
-          }
-        }
+      // 定义支持的网络
+      const supportedNetworks = [1337, 5777]; // Hardhat 和 Ganache
+      
+      if (!supportedNetworks.includes(currentChainIdNum)) {
+        console.log(`ℹ️ 当前网络: ${currentChainIdNum}，推荐使用本地开发网络 (1337 或 5777)`);
+        // 显示友好提示，但不阻塞连接
+        toast('提示：当前不在本地开发网络，某些功能可能受限', {
+          icon: 'ℹ️',
+          duration: 3000,
+        });
+      } else {
+        console.log(`✅ 当前网络: ${currentChainIdNum} (本地开发网络)`);
       }
 
       // 请求账户访问权限
-      // 根治：优先使用 wallet_requestPermissions，让用户可以重新勾选要授权的网站账号
+      // 使用标准的 eth_requestAccounts 方法，这是最稳定的方式
       let accounts;
+      let retriedOnExtensionError = false; // 仅对“扩展未响应”类错误重试一次
       try {
-        console.log('📋 尝试使用 wallet_requestPermissions 获取账户权限...');
-        await window.ethereum.request({
-          method: 'wallet_requestPermissions',
-          params: [{ eth_accounts: {} }]
+        console.log('📋 请求MetaMask账户访问权限...');
+        
+        // 显示即时反馈
+        toast.loading('请在MetaMask中确认连接...', {
+          id: 'metamask-connecting',
+          duration: 10000,
         });
-
-        accounts = await window.ethereum.request({
-          method: 'eth_accounts'
+        
+        console.log('📊 请求前状态:', {
+          ethereumExists: typeof window.ethereum !== 'undefined',
+          isMetaMask: window.ethereum?.isMetaMask,
+          chainId: window.ethereum?.chainId,
+          selectedAddress: window.ethereum?.selectedAddress,
         });
+        
+        // 先检查是否有已授权账户（快速，不需要用户交互）
+        try {
+          const pendingAccounts = await Promise.race([
+            window.ethereum.request({ method: 'eth_accounts' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+          ]);
+          if (pendingAccounts && pendingAccounts.length > 0) {
+            console.log('ℹ️ 检测到已授权账户:', pendingAccounts);
+            accounts = pendingAccounts;
+            toast.dismiss('metamask-connecting');
+          }
+        } catch (checkError) {
+          console.warn('检查已授权账户时出错:', checkError.message);
+        }
 
-        console.log('✅ wallet_requestPermissions 获取到账户:', accounts);
-      } catch (permError) {
-        console.warn('⚠️ wallet_requestPermissions 失败，回退到 eth_requestAccounts:', permError);
+        // 如果没有已授权账户，请求授权（需要用户交互）
+        const requestAccounts = async () => {
+          console.log('📝 请求新的账户授权...');
+          return Promise.race([
+            window.ethereum.request({ method: 'eth_requestAccounts' }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('连接超时，请检查MetaMask弹窗')), 30000)
+            )
+          ]);
+        };
 
-        accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts'
+        if (!accounts || accounts.length === 0) {
+          accounts = await requestAccounts();
+          toast.dismiss('metamask-connecting');
+        }
+
+        console.log('✅ 成功获取账户:', accounts.length, '个');
+        console.log('📍 账户列表:', accounts.map(a => `${a.substring(0, 6)}...${a.substring(a.length - 4)}`));
+        
+        if (!accounts || accounts.length === 0) {
+          throw new Error('未获取到账户信息，请确保已在MetaMask中解锁账户');
+        }
+      } catch (requestError) {
+        toast.dismiss('metamask-connecting');
+        
+        console.error('❌ 请求账户访问失败:', {
+          error: requestError,
+          code: requestError.code,
+          message: requestError.message,
+          data: requestError.data,
         });
-      }
+        
+        // 针对“扩展未响应/未找到”类错误，尝试一次重新检测+重试
+        const isExtensionBridgeError = (err) => {
+          const msg = err?.message || '';
+          return msg.includes('MetaMask extension not found') ||
+                 msg.includes('Failed to connect to MetaMask');
+        };
 
-      if (!accounts || accounts.length === 0) {
-        throw new Error('未获取到账户信息');
+        if (!retriedOnExtensionError && isExtensionBridgeError(requestError)) {
+          retriedOnExtensionError = true;
+          console.warn('⚠️ 检测到扩展桥接异常，尝试重新检测并重试连接');
+          toast('MetaMask 扩展未响应，请在浏览器中重新启用扩展后重试', {
+            icon: '🦊',
+            duration: 3000,
+          });
+
+          // 短暂等待，给用户打开扩展的时间
+          await new Promise((resolve) => setTimeout(resolve, 800));
+
+          // 重新检测 provider
+          if (typeof window.ethereum === 'undefined') {
+            throw new Error('未检测到MetaMask扩展，请安装或启用后重试');
+          }
+
+          // 再次请求账户
+          try {
+            accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            console.log('✅ 重试后获取账户成功:', accounts);
+            if (!accounts || accounts.length === 0) {
+              throw new Error('未获取到账户信息，请确保已在MetaMask中解锁账户');
+            }
+            // 成功则直接继续后续流程
+          } catch (retryErr) {
+            console.error('❌ 重试请求账户仍失败:', retryErr);
+            throw new Error(retryErr.message || '无法连接到MetaMask，请确保扩展已启用并解锁');
+          }
+        } else if (requestError.message?.includes('timeout') || requestError.message?.includes('超时')) {
+          throw new Error('连接超时，请确保MetaMask弹窗已打开并点击连接');
+        } else if (requestError.code === 4001) {
+          throw new Error('用户拒绝了连接请求');
+        } else if (requestError.code === -32002) {
+          throw new Error('MetaMask请求待处理，请打开MetaMask扩展查看待处理的连接请求');
+        } else if (requestError.code === -32603) {
+          throw new Error('MetaMask内部错误，请重启浏览器后重试');
+        } else if (requestError.message?.includes('Already processing')) {
+          throw new Error('MetaMask正在处理上一个请求，请稍后重试');
+        } else if (requestError.message) {
+          throw new Error(`连接失败: ${requestError.message}`);
+        } else {
+          throw new Error('无法连接到MetaMask，请确保已安装并解锁');
+        }
       }
 
       // 如果有多个账户，显示选择对话框
@@ -578,11 +651,25 @@ export const Web3Provider = ({ children }) => {
 
       // 只有一个账户，直接使用
       const address = accounts[0];
+      console.log('📍 使用账户:', address);
+      
+      // 更新进度提示
+      toast.loading('正在初始化连接...', {
+        id: 'wallet-connecting',
+      });
       
       // 使用统一的初始化方法
-      const initialized = await initializeWeb3Connection(address);
+      let initialized = false;
+      try {
+        initialized = await initializeWeb3Connection(address);
+      } catch (initError) {
+        console.error('❌ 初始化Web3连接时发生错误:', initError);
+        toast.dismiss('wallet-connecting');
+        throw new Error(`初始化失败: ${initError.message || '未知错误'}`);
+      }
 
       if (!initialized) {
+        toast.dismiss('wallet-connecting');
         throw new Error('钱包初始化失败，请重试');
       }
 
@@ -590,16 +677,27 @@ export const Web3Provider = ({ children }) => {
       // 用户需要明确启用自动连接（通过设置或其他方式）
       // 这里不设置 cc_auto_connect_enabled，保持默认禁用状态
 
-      console.log('🎉 钱包连接成功');
+      console.log('🎉 钱包连接成功，地址:', `${address.substring(0, 6)}...${address.substring(address.length - 4)}`);
       
-      toast.success('钱包连接成功！');
+      // 关闭加载提示，显示成功
+      toast.dismiss('wallet-connecting');
+      toast.success('钱包连接成功！', {
+        duration: 3000,
+        icon: '🎉',
+      });
       
     } catch (error) {
-      console.error('钱包连接错误:', error);
+      console.error('❌ 钱包连接错误:', error);
+
+      // 关闭所有加载提示
+      toast.dismiss('wallet-connecting');
+      toast.dismiss('metamask-connecting');
 
       let errorMessage = '钱包连接失败';
       if (error.code === 4001) {
         errorMessage = '用户取消了连接请求';
+      } else if (error.code === -32002) {
+        errorMessage = 'MetaMask请求待处理，请检查MetaMask弹窗';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -611,11 +709,17 @@ export const Web3Provider = ({ children }) => {
       setConnected(false);
       setError(errorMessage);
 
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        duration: 4000,
+        icon: '❌',
+      });
       throw error;
     } finally {
       setIsConnecting(false);
       setIsLoading(false);
+      // 确保所有toast都被清理
+      toast.dismiss('wallet-connecting');
+      toast.dismiss('metamask-connecting');
     }
   };
 
@@ -722,6 +826,7 @@ export const Web3Provider = ({ children }) => {
 
   // 处理账户选择
   const handleAccountSelect = useCallback(async (selectedAddress) => {
+    console.log('👤 用户选择账户:', selectedAddress);
     try {
       setIsConnecting(true);
       setIsLoading(true);

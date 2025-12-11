@@ -26,7 +26,7 @@ import {
 import { useWeb3 } from '../context/Web3ContextFixed';
 import { useThemeMode } from '../context/ThemeModeContext';
 import { useNavigate } from 'react-router-dom';
-import { uploadToIPFS } from '../utils/ipfs';
+import { uploadToIPFS, makeGatewayURL } from '../utils/ipfs';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Container } from '@mui/material';
@@ -223,7 +223,7 @@ const ManualCreation = () => {
 
       // 第二阶段：上传文件到IPFS
       setSuccess('正在上传文件到IPFS分布式存储...');
-      const fileHash = await uploadToIPFS(file, {
+      const fileUpload = await uploadToIPFS(file, {
         name: title || file.name,
         creator: account,
         attributes: {
@@ -233,7 +233,10 @@ const ManualCreation = () => {
         }
       });
 
-      logger.info('文件上传到IPFS成功:', fileHash);
+      logger.info('文件上传到IPFS成功:', fileUpload);
+
+      const fileHash = fileUpload.hash;
+      const fileUrl = fileUpload.url || makeGatewayURL(fileHash);
 
       // 第三阶段：构建创作元数据
       const processMetadata = {
@@ -258,7 +261,11 @@ const ManualCreation = () => {
 
       // 第四阶段：第一次确权 - 记录创作过程
       setSuccess('第一次确权：正在记录创作过程到区块链...');
+      console.log('📝 开始区块链注册，元数据:', processMetadata);
       const registrationResult = await blockchainService.registerCreation(processMetadata);
+      console.log('✅ 区块链注册结果:', registrationResult);
+      console.log('  - creationId:', registrationResult?.creationId);
+      console.log('  - transactionHash:', registrationResult?.transactionHash);
 
       logger.info('创作过程注册成功:', registrationResult);
 
@@ -272,9 +279,9 @@ const ManualCreation = () => {
           title: title,
           description: description,
           visibility: visibility || 'private',
-          content_hash: fileHash, // 使用上传返回的路径作为content_hash
+          content_hash: fileHash, // 使用上传返回的哈希作为内容哈希
           metadata_hash: fileHash, // 暂时使用相同的hash
-          image_url: fileHash, // 图片URL路径
+          image_url: fileUrl, // 图片URL路径
           ai_model: 'manual', // 手工创作
           prompt_text: creationProcess || '手工创作作品',
           contribution_score: 100, // 手工创作默认满分贡献度
@@ -287,6 +294,13 @@ const ManualCreation = () => {
           final_confirmation: false,
           verification_proof: ''
         };
+        
+        console.log('📤 准备发送创作数据到后端:', backendCreationData);
+        console.log('  - title:', title);
+        console.log('  - content_hash:', fileHash);
+        console.log('  - metadata_hash:', fileHash);
+        console.log('  - image_url:', fileUrl);
+        
         const creationResponse = await apiService.createCreation(backendCreationData);
         backendCreationRecord = creationResponse?.data || creationResponse?.creation || null;
         console.log('数据库保存成功', backendCreationRecord);
@@ -305,7 +319,7 @@ const ManualCreation = () => {
         version: '1.0'
       };
 
-      const metadataHash = await uploadToIPFS(
+      const metadataUpload = await uploadToIPFS(
         new Blob([JSON.stringify(finalMetadata, null, 2)], { type: 'application/json' }),
         {
           name: `${title}_metadata.json`,
@@ -316,6 +330,8 @@ const ManualCreation = () => {
           }
         }
       );
+      const metadataHash = metadataUpload.hash;
+      const metadataUrl = metadataUpload.url || makeGatewayURL(metadataHash);
 
       // 第七阶段：第二次确权 - 最终确认
       setSuccess('第二次确权：正在进行最终确认...');
@@ -332,16 +348,16 @@ const ManualCreation = () => {
 
       logger.info('创作确认成功:', confirmationResult);
 
-      // 第八阶段：更新数据库状态（可选）
+      // 第八阶段：更新数据库状态（包括token_id）
       if (backendCreationRecord?.id) {
         try {
-          await apiService.updateCreationStatus(backendCreationRecord.id, {
-            status: 'confirmed',
-            metadataHash: metadataHash,
-            confirmationTx: confirmationResult.transactionHash,
-            confirmedAt: new Date().toISOString()
+          // 使用 updateCreation 接口更新完整信息，包括 token_id
+          await apiService.updateCreation(backendCreationRecord.id, {
+            token_id: registrationResult.creationId,
+            metadata_hash: metadataHash,
+            visibility: 'public'
           });
-          console.log('数据库状态更新成功');
+          console.log('数据库状态更新成功，包括token_id:', registrationResult.creationId);
         } catch (dbError) {
           // 静默处理数据库错误，不影响用户体验
           console.debug('后端服务不可用，数据已保存到区块链:', dbError.message);
@@ -359,8 +375,8 @@ const ManualCreation = () => {
         description: description,
         type: 'manual',
         creationType: 'manual', // 标记为手工创作
-        image: fileHash, // 保存上传后返回的图片路径（如 /uploads/images/xxx）
-        image_url: fileHash, // 兼容后端字段名
+        image: fileUrl, // 保存上传后返回的图片URL
+        image_url: fileUrl, // 兼容后端字段名
         category: creationType !== null ? manualCreationTypes[creationType].label : '其他',
         creationTypeLabel: creationType !== null ? manualCreationTypes[creationType].label : 'unknown',
         tags: tags,

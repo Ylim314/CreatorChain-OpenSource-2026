@@ -87,8 +87,13 @@ class ApiService {
     // 清理和验证 headers，确保所有值都是有效的字符串
     const cleanHeaders = {};
     
-    // 添加 Content-Type
-    cleanHeaders['Content-Type'] = 'application/json';
+    // 检查是否为FormData上传（不应该设置Content-Type）
+    const isFormDataUpload = options.body instanceof FormData;
+    
+    // 只在非FormData请求时添加 Content-Type
+    if (!isFormDataUpload) {
+      cleanHeaders['Content-Type'] = 'application/json';
+    }
     
     // 添加认证头（确保值都是字符串且不为空，移除可能导致问题的字符）
     if (hasAuth) {
@@ -99,19 +104,10 @@ class ApiService {
         cleanHeaders['Signature'] = authHeaders['Signature'].trim();
       }
       if (authHeaders['Message'] && typeof authHeaders['Message'] === 'string') {
-        // Message 必须保持原始格式（包含换行符），因为签名验证需要精确匹配
-        // 但是 HTTP headers 不能包含未编码的换行符，所以使用 base64 编码
-        // 后端需要相应地解码 base64
-        try {
-          // 使用 base64 编码 Message，避免换行符问题
-          const base64Message = btoa(unescape(encodeURIComponent(authHeaders['Message'])));
-          cleanHeaders['Message'] = base64Message;
-          cleanHeaders['Message-Encoding'] = 'base64'; // 添加标识，告诉后端这是 base64 编码的
-        } catch (e) {
-          console.error('❌ Base64 编码失败，使用原始 Message:', e);
-          // 如果 base64 编码失败，尝试使用原始值（可能会失败）
-          cleanHeaders['Message'] = authHeaders['Message'];
-        }
+        // Message包含换行符会导致HTTP 400错误
+        // 移除所有换行符和回车符，只保留单行文本
+        const cleanMessage = authHeaders['Message'].replace(/[\r\n]+/g, ' ').trim();
+        cleanHeaders['Message'] = cleanMessage;
       }
       if (authHeaders['Timestamp'] && typeof authHeaders['Timestamp'] === 'string') {
         cleanHeaders['Timestamp'] = authHeaders['Timestamp'].trim();

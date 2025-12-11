@@ -111,6 +111,96 @@ class BlockchainService {
     return keccak256(toUtf8Bytes(JSON.stringify(content)));
   }
 
+  // 降级到模拟模式的辅助方法
+  async _fallbackToSimulated(metadata) {
+    console.log('降级到模拟注册创作:', metadata);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast.success('创作已保存（本地模式，区块链节点不可用）');
+    return {
+      transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
+      creationId: Math.floor(Math.random() * 10000),
+      gasUsed: '21000',
+      isSimulated: true,
+      fallbackMode: true
+    };
+  }
+
+  // 降级到模拟模式的辅助方法（确认创作）
+  async _fallbackToSimulatedConfirm(creationId, finalMetadata) {
+    console.log('降级到模拟确认创作:', { creationId, finalMetadata });
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast.success('创作确认完成（本地模式，区块链节点不可用）');
+    return {
+      transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
+      gasUsed: '21000',
+      isSimulated: true,
+      fallbackMode: true
+    };
+  }
+
+  // 检查是否是 RPC 连接错误（需要降级到模拟模式）
+  // 注意：对于本地网络，RPC 错误应该提示用户启动节点，而不是直接降级
+  _isRPCError(error, isLocalNetwork = false) {
+    if (!error) return false;
+    const errorMessage = error.message || error.toString() || '';
+    const errorCode = error.code;
+    
+    // 对于本地网络，只有明确的连接拒绝错误才认为是 RPC 错误
+    // 其他错误可能是合约调用失败，应该让用户知道
+    if (isLocalNetwork) {
+      const localRPCErrors = [
+        'ECONNREFUSED',
+        'Failed to fetch',
+        'ENOTFOUND',
+        'ETIMEDOUT'
+      ];
+      return localRPCErrors.some(pattern => 
+        errorMessage.toLowerCase().includes(pattern.toLowerCase())
+      ) || errorCode === -32002; // RPC endpoint returned too many errors
+    }
+    
+    // 对于非本地网络，检查常见的 RPC 错误
+    const rpcErrorPatterns = [
+      'Failed to fetch',
+      'RPC endpoint returned too many errors',
+      'could not coalesce error',
+      'network error',
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'ENOTFOUND'
+    ];
+    
+    const isRPCError = rpcErrorPatterns.some(pattern => 
+      errorMessage.toLowerCase().includes(pattern.toLowerCase())
+    );
+    
+    // 检查错误代码（排除合约调用失败的情况）
+    const isRPCErrorCode = errorCode === -32002 || errorCode === -32603;
+    
+    // CALL_EXCEPTION 和 missing revert data 通常是合约调用失败，不是 RPC 连接问题
+    // 不应该降级，应该让用户知道合约调用失败
+    
+    return isRPCError || isRPCErrorCode;
+  }
+  
+  // 检查是否是本地节点未运行的错误
+  _isLocalNodeUnavailable(error) {
+    if (!error) return false;
+    const errorMessage = error.message || error.toString() || '';
+    const errorCode = error.code;
+    
+    const localNodeErrors = [
+      'ECONNREFUSED',
+      'Failed to fetch',
+      'ENOTFOUND',
+      'ETIMEDOUT'
+    ];
+    
+    return localNodeErrors.some(pattern => 
+      errorMessage.toLowerCase().includes(pattern.toLowerCase())
+    ) || errorCode === -32002;
+  }
+
   // 第一步：注册创作过程
   async registerCreation(metadata) {
     try {
@@ -136,6 +226,29 @@ class BlockchainService {
 
       toast('正在提交到区块链...');
 
+      // 检查网络是否支持EIP-1559（在尝试任何 RPC 调用之前）
+      let network;
+      let isLocalNetwork = false;
+      try {
+        network = await this.provider.getNetwork();
+        isLocalNetwork = network.chainId === 1337n || network.chainId === 5777n; // Ganache/Hardhat 本地网络
+      } catch (networkError) {
+        if (this._isLocalNodeUnavailable(networkError)) {
+          // 本地节点未运行，提示用户
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache，或切换到其他网络（如 Sepolia 测试网）');
+          throw new Error('本地区块链节点不可用，请启动本地节点或切换网络');
+        }
+        if (this._isRPCError(networkError, isLocalNetwork)) {
+          console.warn('无法获取网络信息，RPC 连接失败:', networkError);
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          return this._fallbackToSimulated(metadata);
+        }
+        throw networkError;
+      }
+
       // 首先估算gas
       let gasEstimate;
       try {
@@ -148,22 +261,60 @@ class BlockchainService {
         );
         console.log('Gas估算:', gasEstimate.toString());
       } catch (gasError) {
+        if (this._isLocalNodeUnavailable(gasError) && isLocalNetwork) {
+          // 本地节点未运行
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(gasError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('Gas估算失败，RPC 连接问题，降级到模拟模式:', gasError);
+          return this._fallbackToSimulated(metadata);
+        }
+        // 合约调用失败（如 missing revert data），使用默认值继续尝试
         console.warn('Gas估算失败，使用默认值:', gasError);
         gasEstimate = 500000n; // 使用默认的gas限制
       }
 
-      // 检查网络是否支持EIP-1559
-      const network = await this.provider.getNetwork();
-      const isLocalNetwork = network.chainId === 1337n || network.chainId === 5777n; // Ganache/Hardhat 本地网络
       const isEIP1559Supported = !isLocalNetwork;
 
       // 获取当前网络的 Gas 价格建议
       let feeData;
       try {
-        feeData = await this.provider.getFeeData();
+        // 对于本地网络，尝试使用 getFeeData，但如果失败就使用默认值
+        if (isLocalNetwork) {
+          try {
+            feeData = await this.provider.getFeeData();
+          } catch (localFeeError) {
+            if (this._isLocalNodeUnavailable(localFeeError)) {
+              toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+              throw new Error('本地区块链节点不可用');
+            }
+            // 本地网络可能不支持某些方法，使用默认值
+            console.log('本地网络 Gas 价格获取失败，使用默认值:', localFeeError.message);
+            feeData = { gasPrice: 20000000000n }; // 20 gwei
+          }
+        } else {
+          feeData = await this.provider.getFeeData();
+        }
       } catch (feeError) {
+        if (this._isLocalNodeUnavailable(feeError) && isLocalNetwork) {
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(feeError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('获取 Gas 价格失败，RPC 连接问题，降级到模拟模式:', feeError);
+          return this._fallbackToSimulated(metadata);
+        }
         console.warn('获取 Gas 价格失败，使用默认值:', feeError);
-        feeData = null;
+        feeData = { gasPrice: 20000000000n }; // 20 gwei
       }
 
       // 根据网络类型配置交易参数
@@ -175,12 +326,8 @@ class BlockchainService {
         // 支持EIP-1559的网络（如以太坊主网、测试网）
         txOptions.maxFeePerGas = feeData.maxFeePerGas;
         txOptions.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || 1000000000n; // 1 gwei
-      } else if (isLocalNetwork) {
-        // 本地网络（Ganache/Hardhat）- 使用非常低的 Gas 价格
-        // Ganache 通常接受 0 或非常低的价格
-        txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 使用网络建议或默认 20 gwei
       } else {
-        // 不支持EIP-1559的其他网络
+        // 本地网络或其他不支持EIP-1559的网络 - 只使用 gasPrice
         txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 20 gwei
       }
 
@@ -215,20 +362,59 @@ class BlockchainService {
 
       // 执行交易
       console.log('正在发送交易到 MetaMask...');
-      const tx = await this.contract.registerCreation(
-        metadata.title,
-        metadata.description,
-        metadata.fileHash,
-        metadata.creationType || 0,
-        contentHash,
-        txOptions
-      );
+      let tx;
+      try {
+        tx = await this.contract.registerCreation(
+          metadata.title,
+          metadata.description,
+          metadata.fileHash,
+          metadata.creationType || 0,
+          contentHash,
+          txOptions
+        );
+      } catch (txError) {
+        // 用户拒绝交易不应该降级
+        if (txError.code === 'ACTION_REJECTED' || txError.code === 4001) {
+          throw txError;
+        }
+        if (this._isLocalNodeUnavailable(txError) && isLocalNetwork) {
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(txError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('发送交易失败，RPC 连接问题，降级到模拟模式:', txError);
+          return this._fallbackToSimulated(metadata);
+        }
+        throw txError;
+      }
       
       console.log('交易已发送，交易哈希:', tx.hash);
 
       toast('交易已提交，等待确认...');
 
-      const receipt = await tx.wait();
+      let receipt;
+      try {
+        receipt = await tx.wait();
+      } catch (waitError) {
+        if (this._isLocalNodeUnavailable(waitError) && isLocalNetwork) {
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(waitError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('等待交易确认失败，RPC 连接问题，降级到模拟模式:', waitError);
+          return this._fallbackToSimulated(metadata);
+        }
+        throw waitError;
+      }
+      
       const creationId = receipt.logs[0]?.args?.[0] || Math.floor(Math.random() * 10000);
 
       toast.success('创作已成功注册到区块链！');
@@ -262,32 +448,20 @@ class BlockchainService {
       } else if (error.message?.includes('user rejected') || error.message?.includes('User denied')) {
         toast.error('您拒绝了交易请求');
         throw new Error('用户拒绝了交易请求');
+      } else if (this._isLocalNodeUnavailable(error)) {
+        // 本地节点未运行，提示用户
+        toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache，或切换到其他网络（如 Sepolia 测试网）');
+        throw new Error('本地区块链节点不可用');
+      } else if (this._isRPCError(error, false)) {
+        // 非本地网络的 RPC 连接错误，降级到模拟模式
+        console.warn('检测到 RPC 连接错误，降级到模拟模式:', error);
+        return this._fallbackToSimulated(metadata);
       } else if (error.code === -32602 || error.message?.includes('EIP-1559')) {
         console.warn('EIP-1559不兼容错误，可能是网络配置问题，尝试模拟模式');
-        // 降级到模拟模式
-        console.log('降级到模拟注册创作:', metadata);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success('创作已保存（本地模式）');
-        return {
-          transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
-          creationId: Math.floor(Math.random() * 10000),
-          gasUsed: '21000',
-          isSimulated: true,
-          fallbackMode: true
-        };
+        return this._fallbackToSimulated(metadata);
       } else if (error.code === -32603 || error.message?.includes('Internal JSON-RPC error')) {
         console.warn('JSON-RPC错误，可能是网络问题，尝试模拟模式');
-        // 降级到模拟模式
-        console.log('降级到模拟注册创作:', metadata);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success('创作已保存（本地模式）');
-        return {
-          transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
-          creationId: Math.floor(Math.random() * 10000),
-          gasUsed: '21000',
-          isSimulated: true,
-          fallbackMode: true
-        };
+        return this._fallbackToSimulated(metadata);
       } else {
         toast.error('注册创作失败: ' + (error.reason || error.message || '未知错误'));
       }
@@ -314,6 +488,29 @@ class BlockchainService {
 
       toast('正在确认创作到区块链...');
 
+      // 检查网络是否支持EIP-1559（在尝试任何 RPC 调用之前）
+      let network;
+      let isLocalNetwork = false;
+      try {
+        network = await this.provider.getNetwork();
+        isLocalNetwork = network.chainId === 1337n || network.chainId === 5777n; // Ganache/Hardhat 本地网络
+      } catch (networkError) {
+        if (this._isLocalNodeUnavailable(networkError)) {
+          // 本地节点未运行，提示用户
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache，或切换到其他网络（如 Sepolia 测试网）');
+          throw new Error('本地区块链节点不可用，请启动本地节点或切换网络');
+        }
+        if (this._isRPCError(networkError, isLocalNetwork)) {
+          console.warn('无法获取网络信息，RPC 连接失败:', networkError);
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
+        }
+        throw networkError;
+      }
+
       // 首先估算gas
       let gasEstimate;
       try {
@@ -324,22 +521,60 @@ class BlockchainService {
         );
         console.log('确认创作Gas估算:', gasEstimate.toString());
       } catch (gasError) {
+        if (this._isLocalNodeUnavailable(gasError) && isLocalNetwork) {
+          // 本地节点未运行
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(gasError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('确认创作Gas估算失败，RPC 连接问题，降级到模拟模式:', gasError);
+          return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
+        }
+        // 合约调用失败（如 missing revert data），使用默认值继续尝试
         console.warn('确认创作Gas估算失败，使用默认值:', gasError);
         gasEstimate = 300000n; // 使用较大的默认gas限制
       }
 
-      // 检查网络是否支持EIP-1559
-      const network = await this.provider.getNetwork();
-      const isLocalNetwork = network.chainId === 1337n || network.chainId === 5777n; // Ganache/Hardhat 本地网络
       const isEIP1559Supported = !isLocalNetwork;
 
       // 获取当前网络的 Gas 价格建议
       let feeData;
       try {
-        feeData = await this.provider.getFeeData();
+        // 对于本地网络，尝试使用 getFeeData，但如果失败就使用默认值
+        if (isLocalNetwork) {
+          try {
+            feeData = await this.provider.getFeeData();
+          } catch (localFeeError) {
+            if (this._isLocalNodeUnavailable(localFeeError)) {
+              toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+              throw new Error('本地区块链节点不可用');
+            }
+            // 本地网络可能不支持某些方法，使用默认值
+            console.log('本地网络 Gas 价格获取失败，使用默认值:', localFeeError.message);
+            feeData = { gasPrice: 20000000000n }; // 20 gwei
+          }
+        } else {
+          feeData = await this.provider.getFeeData();
+        }
       } catch (feeError) {
+        if (this._isLocalNodeUnavailable(feeError) && isLocalNetwork) {
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(feeError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('获取 Gas 价格失败，RPC 连接问题，降级到模拟模式:', feeError);
+          return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
+        }
         console.warn('获取 Gas 价格失败，使用默认值:', feeError);
-        feeData = null;
+        feeData = { gasPrice: 20000000000n }; // 20 gwei
       }
 
       // 根据网络类型配置交易参数
@@ -351,11 +586,8 @@ class BlockchainService {
         // 支持EIP-1559的网络（如以太坊主网、测试网）
         txOptions.maxFeePerGas = feeData.maxFeePerGas;
         txOptions.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || 1000000000n; // 1 gwei
-      } else if (isLocalNetwork) {
-        // 本地网络（Ganache/Hardhat）- 使用非常低的 Gas 价格
-        txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 使用网络建议或默认 20 gwei
       } else {
-        // 不支持EIP-1559的其他网络
+        // 本地网络或其他不支持EIP-1559的网络 - 只使用 gasPrice
         txOptions.gasPrice = feeData?.gasPrice || 20000000000n; // 20 gwei
       }
 
@@ -390,18 +622,56 @@ class BlockchainService {
 
       // 执行交易
       console.log('正在发送确认交易到 MetaMask...');
-      const tx = await this.contract.confirmCreation(
-        creationId,
-        finalMetadata.finalIpfsHash,
-        finalContentHash,
-        txOptions
-      );
+      let tx;
+      try {
+        tx = await this.contract.confirmCreation(
+          creationId,
+          finalMetadata.finalIpfsHash,
+          finalContentHash,
+          txOptions
+        );
+      } catch (txError) {
+        // 用户拒绝交易不应该降级
+        if (txError.code === 'ACTION_REJECTED' || txError.code === 4001) {
+          throw txError;
+        }
+        if (this._isLocalNodeUnavailable(txError) && isLocalNetwork) {
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(txError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('发送确认交易失败，RPC 连接问题，降级到模拟模式:', txError);
+          return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
+        }
+        throw txError;
+      }
       
       console.log('确认交易已发送，交易哈希:', tx.hash);
 
       toast('确认交易已提交，等待确认...');
       
-      const receipt = await tx.wait();
+      let receipt;
+      try {
+        receipt = await tx.wait();
+      } catch (waitError) {
+        if (this._isLocalNodeUnavailable(waitError) && isLocalNetwork) {
+          toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache');
+          throw new Error('本地区块链节点不可用');
+        }
+        if (this._isRPCError(waitError, isLocalNetwork)) {
+          if (isLocalNetwork) {
+            toast.error('无法连接到本地区块链节点，请确保 Hardhat 或 Ganache 正在运行');
+            throw new Error('本地区块链节点不可用');
+          }
+          console.warn('等待确认交易失败，RPC 连接问题，降级到模拟模式:', waitError);
+          return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
+        }
+        throw waitError;
+      }
 
       toast.success('创作确认完成！版权保护已生效');
 
@@ -433,30 +703,20 @@ class BlockchainService {
       } else if (error.message?.includes('user rejected') || error.message?.includes('User denied')) {
         toast.error('您拒绝了交易请求');
         throw new Error('用户拒绝了交易请求');
+      } else if (this._isLocalNodeUnavailable(error)) {
+        // 本地节点未运行，提示用户
+        toast.error('本地区块链节点未运行，请启动 Hardhat 或 Ganache，或切换到其他网络（如 Sepolia 测试网）');
+        throw new Error('本地区块链节点不可用');
+      } else if (this._isRPCError(error, false)) {
+        // 非本地网络的 RPC 连接错误，降级到模拟模式
+        console.warn('检测到 RPC 连接错误，降级到模拟模式:', error);
+        return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
       } else if (error.code === -32602 || error.message?.includes('EIP-1559')) {
         console.warn('EIP-1559不兼容错误，可能是网络配置问题，尝试模拟模式');
-        // 降级到模拟模式
-        console.log('降级到模拟确认创作:', { creationId, finalMetadata });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success('创作确认完成（本地模式）');
-        return {
-          transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
-          gasUsed: '21000',
-          isSimulated: true,
-          fallbackMode: true
-        };
+        return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
       } else if (error.code === -32603 || error.message?.includes('Internal JSON-RPC error')) {
         console.warn('JSON-RPC错误，可能是网络问题，尝试模拟模式');
-        // 降级到模拟模式
-        console.log('降级到模拟确认创作:', { creationId, finalMetadata });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success('创作确认完成（本地模式）');
-        return {
-          transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
-          gasUsed: '21000',
-          isSimulated: true,
-          fallbackMode: true
-        };
+        return this._fallbackToSimulatedConfirm(creationId, finalMetadata);
       } else {
         toast.error('确认创作失败: ' + (error.reason || error.message || '未知错误'));
       }

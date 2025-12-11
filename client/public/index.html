@@ -2,14 +2,15 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="icon" href="%PUBLIC_URL%/logos/logo-cyber-flux.svg" type="image/svg+xml" />
+    <link rel="shortcut icon" href="%PUBLIC_URL%/logos/logo-cyber-flux.svg" type="image/svg+xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
       content="CreatorChain - 区块链+AIGC创作确权平台"
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logos/logo-cyber-flux.svg" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     
     <!-- Material Icons -->
@@ -44,6 +45,9 @@
                  msg.includes('main.') ||
                  msg.includes('chunk.') ||
                  msg.includes('a.onload') ||
+                 msg.includes('Failed to connect to MetaMask') ||
+                 msg.includes('chrome-extension://') ||
+                 msg.includes('inpage.js') ||
                  /^[a-z]\[[a-z]\]/.test(msg);
         }
 

@@ -50,7 +50,7 @@ const getUploadEndpoint = (fileType) => {
   }
 };
 
-// 使用本地服务上传文件
+// 使用本地服务上传文件，返回 { hash, url }
 const uploadToLocalService = (file, metadata, onProgress) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -59,10 +59,12 @@ const uploadToLocalService = (file, metadata, onProgress) => {
   const endpoint = getUploadEndpoint(file.type);
   const uploadUrl = `http://localhost:8080/api/v1${endpoint}`;
 
-  // 上传到本地服务
+  // 上传到本地服务（不发送认证头，因为上传端点不需要认证）
   return fetch(uploadUrl, {
     method: 'POST',
-    body: formData
+    body: formData,
+    // 不设置Content-Type，让浏览器自动设置multipart/form-data边界
+    // 不设置认证头，避免包含换行符的Message header导致400错误
   }).then(response => {
     if (!response.ok) {
       return response.json().catch(() => ({})).then(errorData => {
@@ -74,8 +76,10 @@ const uploadToLocalService = (file, metadata, onProgress) => {
     if (!result.success || !result.data) {
       throw new Error('上传响应格式错误');
     }
-    // 返回URL路径，这样makeGatewayURL可以直接使用
-    return result.data.url;
+    return {
+      hash: result.data.contentHash || result.data.url,
+      url: result.data.url,
+    };
   });
 };
 
@@ -84,7 +88,7 @@ const uploadToLocalService = (file, metadata, onProgress) => {
  * @param {File|Blob} file - 要上传的文件
  * @param {Object} metadata - 文件元数据
  * @param {Function} onProgress - 上传进度回调
- * @returns {Promise<string>} IPFS哈希值
+ * @returns {Promise<{hash:string, url?:string}>} IPFS哈希值和可访问URL
  */
 export const uploadToIPFS = async (file, metadata = {}, onProgress = null) => {
   try {
@@ -101,7 +105,7 @@ export const uploadToIPFS = async (file, metadata = {}, onProgress = null) => {
     // 检查IPFS服务配置
     if (!PINATA_API_KEY && !PINATA_JWT) {
       // IPFS服务未配置，使用模拟模式
-      return generateMockHash(file);
+      return { hash: generateMockHash(file), url: null };
     }
 
     // 使用Pinata API上传
@@ -109,7 +113,7 @@ export const uploadToIPFS = async (file, metadata = {}, onProgress = null) => {
 
     // 文件上传成功
 
-    return ipfsHash;
+    return { hash: ipfsHash, url: `${IPFS_GATEWAY}/ipfs/${ipfsHash}` };
 
   } catch (error) {
     throw new Error(`IPFS上传失败: ${error.message}`);

@@ -28,6 +28,10 @@ export const setupErrorHandling = () => {
       errorMessage.includes('EIP-1559 transaction but the current network does not support EIP-1559') ||
       errorMessage.includes('Invalid transaction params') ||
       errorMessage.includes('Cannot read properties of undefined') ||
+      errorMessage.includes('Failed to connect to MetaMask') ||
+      errorMessage.includes('chrome-extension://') ||
+      errorMessage.includes('inpage.js') ||
+      errorMessage.includes('MetaMask extension not found') ||
       errorMessage.includes('reading \'slice\'') ||
       errorMessage.includes('reading \'toString\'') ||
       errorMessage.includes('TypeError: Cannot read properties') ||
@@ -157,6 +161,10 @@ export const isMetaMaskError = (error) => {
     errorMessage.includes('message channel closed') ||
     errorMessage.includes('Receiving end does not exist') ||
     errorMessage.includes('Could not establish connection') ||
+    errorMessage.includes('Failed to connect to MetaMask') ||
+    errorMessage.includes('chrome-extension://') ||
+    errorMessage.includes('inpage.js') ||
+    errorMessage.includes('MetaMask extension not found') ||
     errorMessage.includes('MetaMask')
   );
 };

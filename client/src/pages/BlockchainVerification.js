@@ -44,7 +44,7 @@ const BlockchainVerification = () => {
 
     try {
       // 使用真实的IPFS上传功能
-      const uploadedHash = await uploadToIPFS(file, {
+      const uploaded = await uploadToIPFS(file, {
         name: file.name,
         creator: 'blockchain-verification',
         attributes: {
@@ -57,7 +57,8 @@ const BlockchainVerification = () => {
       // 保存上传结果
       setUploadedFile({
         ...file,
-        uploadedHash: uploadedHash,
+        uploadedHash: uploaded.hash,
+        uploadedUrl: uploaded.url,
         uploadedAt: new Date().toISOString()
       });
       setVerificationStep(1); // 自动进入下一步
