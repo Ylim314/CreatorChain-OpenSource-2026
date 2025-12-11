@@ -6,35 +6,48 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title SimpleCreationRegistry
- * @dev 简化版的创作登记合约，和当前前端演示流程一一对应：
- *      - 第一次登记：registerCreation 记录创作过程/文件的哈希等信息
- *      - 第二次确认：confirmCreation 记录最终版本的哈希并标记为 confirmed
- *      不直接铸造 NFT，只负责「在链上证明谁在什么时候创作了什么内容」。
+ * @dev 简化版的创作登记合约，只做一件事：在链上帮创作者“盖章存证”。
+ *
+ * 使用方式可以和你前端的两步流程一一对应：
+ *  1. 第一次登记（registerCreation）：
+ *     - 前端已经把文件上传到本地服务器或 IPFS，得到一个哈希/路径；
+ *     - 前端把标题、描述、文件哈希、创作类型、内容哈希传进来；
+ *     - 合约在链上生成一个 creationId，记录“谁在什么时候登记了哪份内容”。
+ *
+ *  2. 第二次确认（confirmCreation）：
+ *     - 创作完成后，前端得到最终版本的 IPFS 哈希和内容哈希；
+ *     - 创作者本人再次调用 confirmCreation，更新最终哈希并标记为 confirmed；
+ *     - 这一步相当于“盖上最终版的确认章”，完成双重确权。
+ *
+ * 说明：
+ *  - 本合约本身不负责“铸造 NFT”或“处理积分”，只负责登记和查询；
+ *  - 你可以把它理解成：一张专门记“创作登记信息”的链上表，供前端和其他合约引用。
  */
 contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
-    // 创作者角色常量（目前主要用于扩展权限控制，测试环境里默认对所有人开放）
+    // 创作者角色常量（目前主要用于扩展权限控制，演示环境里逻辑比较宽松）
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
 
-    /// @dev 链上保存的一条创作记录
+    /// @dev 链上保存的一条创作记录（可以理解成数据库里的 Creation 行）
     struct Creation {
-        uint256 id;            // 作品在本合约内的自增 ID（1,2,3,...）
+        uint256 id;            // 作品在本合约内的自增 ID（1,2,3,...），前端看到的 creationId
         address creator;       // 创作者的钱包地址（提交交易的 msg.sender）
-        string title;          // 作品标题（由前端传入）
-        string description;    // 作品描述（由前端传入）
-        string ipfsHash;       // 作品文件或元数据在 IPFS / 本地存储中的哈希或路径
-        uint256 creationType;  // 作品类型：前端用 0/1/2... 区分图像、文本、音频等
-        bytes32 contentHash;   // 把标题+描述+文件哈希等做 keccak256 得到的内容哈希，用于防篡改
-        bool confirmed;        // 是否已经做过最终确认（第二次确权）
-        uint256 timestamp;     // 初次登记时的区块时间，作为时间戳证据
+        string title;          // 作品标题（由前端传入，纯文本）
+        string description;    // 作品描述（由前端传入，纯文本）
+        string ipfsHash;       // 作品文件或元数据在 IPFS / 本地存储中的哈希或路径（不做解析，只当字符串）
+        uint256 creationType;  // 作品类型：前端用 0/1/2... 区分图像、文本、音频等（具体含义由前端约定）
+        bytes32 contentHash;   // 把标题+描述+文件哈希等做 keccak256 得到的内容哈希，用于防篡改和查重
+        bool confirmed;        // 是否已经做过最终确认（第二次确权），true 表示已经锁定最终版本
+        uint256 timestamp;     // 初次登记时的区块时间（block.timestamp），作为时间戳证据
     }
 
-    // 通过作品 ID 查询对应的 Creation 详情（相当于链上的「作品表」）
+    // 通过作品 ID 查询对应的 Creation 详情（相当于链上的「作品表」，主键是 creationId）
     mapping(uint256 => Creation) public creations;
-    // 通过创作者地址查询他名下所有作品 ID（方便做个人作品列表）
+    // 通过创作者地址查询他名下所有作品 ID（方便 MyCreations 页面按地址拉取）
     mapping(address => uint256[]) public creatorToCreations;
-    // 自增计数器，用来生成新的作品 ID（每次登记+1，就像排号）
+    // 自增计数器，用来生成新的作品 ID（每次登记 +1，就像排队取号机）
     uint256 private _creationCounter;
 
+    // 当一条创作首次登记成功时触发（前端可以监听这个事件更新列表）
     event CreationRegistered(
         uint256 indexed creationId,
         address indexed creator,
@@ -42,6 +55,7 @@ contract SimpleCreationRegistry is AccessControl, ReentrancyGuard {
         string ipfsHash
     );
 
+    // 当创作被最终确认（第二次确权完成）时触发
     event CreationConfirmed(
         uint256 indexed creationId,
         address indexed creator,
