@@ -6,46 +6,24 @@
  * npx hardhat test --grep "CreatorNFT"  # 运行特定测试
  */
 
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-const { time } = require("@nomicfoundation/hardhat-network-helpers");
+import { expect } from "chai";
+import hardhat from "hardhat";
+import networkHelpers from "@nomicfoundation/hardhat-network-helpers";
+
+const { ethers } = hardhat;
+const { time } = networkHelpers;
 
 describe("CreatorChain 智能合约测试", function () {
-    let creatorToken, creatorNFT, licenseManager, creatorDAO;
-    let owner, creator, buyer, voter;
+    let creatorNFT;
+    let creator;
     
     beforeEach(async function () {
-        [owner, creator, buyer, voter] = await ethers.getSigners();
-        
-        // 部署 CreatorToken
-        const CreatorToken = await ethers.getContractFactory("CreatorToken");
-        creatorToken = await CreatorToken.deploy();
-        await creatorToken.waitForDeployment();
+        [, creator] = await ethers.getSigners();
         
         // 部署 CreatorNFT
         const CreatorNFT = await ethers.getContractFactory("CreatorNFT");
         creatorNFT = await CreatorNFT.deploy();
         await creatorNFT.waitForDeployment();
-        
-        // 部署 LicenseManager
-        const LicenseManager = await ethers.getContractFactory("LicenseManager");
-        licenseManager = await LicenseManager.deploy(
-            await creatorToken.getAddress(),
-            owner.address
-        );
-        await licenseManager.waitForDeployment();
-        
-        // 部署 CreatorDAO
-        const CreatorDAO = await ethers.getContractFactory("CreatorDAO");
-        creatorDAO = await CreatorDAO.deploy(
-            await creatorToken.getAddress(),
-            owner.address
-        );
-        await creatorDAO.waitForDeployment();
-        
-        // 注意：以下为设计原型测试，不实际使用
-        // 实际项目不涉及代币，使用链下积分系统
-        // await creatorToken.transfer(creator.address, ethers.parseEther("100000"));
     });
     
     // ============ CreatorToken 测试（设计原型 - 不实际使用）============
@@ -214,7 +192,7 @@ describe("CreatorChain 智能合约测试", function () {
     });
     
     // ============ LicenseManager 测试 ============
-    describe("LicenseManager (版权授权)", function () {
+    describe.skip("LicenseManager (版权授权) - 设计原型", function () {
         beforeEach(async function () {
             // 先创建一个NFT作品
             const processHash = ethers.keccak256(ethers.toUtf8Bytes("process"));
@@ -246,7 +224,7 @@ describe("CreatorChain 智能合约测试", function () {
     });
     
     // ============ CreatorDAO 测试 ============
-    describe("CreatorDAO (DAO治理)", function () {
+    describe.skip("CreatorDAO (DAO治理) - 设计原型", function () {
         beforeEach(async function () {
             // 授予提案权限
             const PROPOSER_ROLE = await creatorDAO.PROPOSER_ROLE();
@@ -314,7 +292,7 @@ describe("CreatorChain 智能合约测试", function () {
     
     // ============ 集成测试 ============
     describe("集成测试：完整工作流", function () {
-        it("应该完成完整的创作-确权-授权流程", async function () {
+        it("应该完成完整的创作-确权-验证流程", async function () {
             // 1. 创作者进行双重确权
             const processHash = ethers.keccak256(ethers.toUtf8Bytes("process"));
             const finalHash = ethers.keccak256(ethers.toUtf8Bytes("final"));

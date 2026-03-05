@@ -94,8 +94,8 @@ POINTS_ADMIN_ADDRESSES=
 #### 方法一：使用启动脚本 (推荐)
 
 ```bash
-# 在项目根目录运行 - 一键启动
-start.bat
+# 仅启动后端（在 backend 目录）
+start_backend.bat
 ```
 
 #### 方法二：手动启动
@@ -304,7 +304,7 @@ go build -o creatorchain-api cmd/api/main.go
 
 - [前端项目](../client/README.md)
 - [智能合约](../contracts/README.md)
-- [部署指南](../docs/运行指南.md)
+- [部署指南](../docs/作品安装说明.md)
 - [项目主文档](../docs/README.md)
 - [作品简介](../docs/作品简介.md)
 - [设计思路](../docs/设计思路.md)
@@ -315,7 +315,7 @@ go build -o creatorchain-api cmd/api/main.go
 
 ```bash
 # 一键启动整个项目
-start.bat
+../start_all.bat
 ```
 
 启动后访问：
