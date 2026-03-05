@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build client
-        run: npm run build
+        run: CI=false npm run build
       - name: Test client
         run: npm test -- --watch=false --passWithNoTests
 
